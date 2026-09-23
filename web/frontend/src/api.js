@@ -7,12 +7,24 @@ async function request(path, options = {}) {
     ...options,
   })
 
-  if (!response.ok) {
-    throw new Error(`请求失败：${response.status}`)
+  let payload = null
+  try {
+    payload = await response.json()
+  } catch {
+    payload = null
   }
-  return response.json()
+
+  if (!response.ok) {
+    throw new Error(payload?.error || `请求失败：${response.status}`)
+  }
+
+  return payload
 }
 
 export function getHealth() {
   return request('/api/health')
+}
+
+export function getMeta() {
+  return request('/api/meta')
 }
