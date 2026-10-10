@@ -45,7 +45,8 @@ const visibleChildren = computed(() => {
 
 const hasChildren = computed(() => visibleChildren.value.length > 0)
 const isExpanded = computed(() => props.expandedIds.has(props.task.id))
-const priorityLabel = computed(() => priorityLabels[props.task.priority] || '中优先级')
+const priority = computed(() => props.task.effectivePriority || props.task.effective_priority || props.task.priority || 'medium')
+const priorityLabel = computed(() => priorityLabels[priority.value] || '中优先级')
 
 function toggle() {
   if (hasChildren.value) {
@@ -105,7 +106,7 @@ function handleCommand(command) {
         </div>
       </div>
 
-      <span class="task-priority" :class="`is-${task.priority || 'medium'}`">{{ priorityLabel }}</span>
+      <span class="task-priority" :class="`is-${priority}`">{{ priorityLabel }}</span>
 
       <el-dropdown trigger="click" @command="handleCommand">
         <button class="task-more-button" type="button" aria-label="更多操作" @click.stop>
@@ -114,7 +115,7 @@ function handleCommand(command) {
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item command="open">打开详情</el-dropdown-item>
-            <el-dropdown-item command="add-child" :disabled="task.completed">添加子任务</el-dropdown-item>
+            <el-dropdown-item command="add-child" :disabled="task.completed || task.depth >= 5">添加子任务</el-dropdown-item>
             <el-dropdown-item command="move" :disabled="task.completed">移动任务</el-dropdown-item>
             <el-dropdown-item command="delete" divided>删除任务</el-dropdown-item>
           </el-dropdown-menu>

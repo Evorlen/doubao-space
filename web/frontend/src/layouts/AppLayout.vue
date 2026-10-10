@@ -15,7 +15,7 @@ const route = useRoute()
 
 const navigation = [
   { label: '工作台', to: '/dashboard', icon: HomeFilled },
-  { label: '任务', to: '/dashboard/tasks', icon: List, badge: '8' },
+  { label: '任务', to: '/dashboard/tasks', icon: List },
   { label: '日程管理', to: '/dashboard/calendar', icon: Calendar },
   { label: '内容收集', to: '/dashboard/notes', icon: Collection },
 ]

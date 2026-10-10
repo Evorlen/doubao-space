@@ -10,12 +10,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Icingworld/doubao-space/internal/tasks"
 	"github.com/Icingworld/doubao-space/web"
 	"github.com/gin-gonic/gin"
 )
 
 // NewRouter creates the API and embedded frontend routes.
 func NewRouter(db *sql.DB, version string, dev bool) *gin.Engine {
+	return NewRouterWithDataDir(db, version, dev, "")
+}
+
+// NewRouterWithDataDir also enables local task attachment storage.
+func NewRouterWithDataDir(db *sql.DB, version string, dev bool, dataDir string) *gin.Engine {
 	if !dev {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -42,6 +48,9 @@ func NewRouter(db *sql.DB, version string, dev bool) *gin.Engine {
 			"version": version,
 		})
 	})
+
+	taskHandler := tasks.NewHandler(tasks.NewService(db, dataDir))
+	taskHandler.Register(router.Group("/api"))
 
 	staticServer := http.FileServer(http.FS(web.DistFS))
 	router.NoRoute(func(c *gin.Context) {

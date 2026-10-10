@@ -52,7 +52,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              *addr,
-		Handler:           httpapi.NewRouter(db, version, *dev),
+		Handler:           httpapi.NewRouterWithDataDir(db, version, *dev, resolvedDataDir),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

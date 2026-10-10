@@ -1,16 +1,25 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Expand,
   Filter,
   Fold,
+  Loading,
   Plus,
   Search,
   Sort,
 } from '@element-plus/icons-vue'
 import TaskRow from '../components/tasks/TaskRow.vue'
+import {
+  completeTask as completeTaskRequest,
+  createTask as createTaskRequest,
+  deleteTask as deleteTaskRequest,
+  getTags,
+  getTasks,
+  moveTask as moveTaskRequest,
+} from '../api'
 
 const router = useRouter()
 
@@ -21,124 +30,30 @@ const filters = [
   { key: 'completed', label: '已完成' },
 ]
 
-const taskTree = ref([
-  {
-    id: 1,
-    title: '整理个人年度规划',
-    completed: false,
-    due: '今天 18:00',
-    dueTone: 'danger',
-    priority: 'high',
-    progress: '2 / 4',
-    tags: ['生活', '重点'],
-    children: [
-      {
-        id: 11,
-        title: '回顾上半年目标完成情况',
-        completed: true,
-        due: '今天 12:00',
-        priority: 'medium',
-        tags: ['复盘'],
-        children: [],
-      },
-      {
-        id: 12,
-        title: '确定下半年的三个关键词',
-        completed: false,
-        due: '今天 16:00',
-        dueTone: 'danger',
-        priority: 'high',
-        tags: ['规划'],
-        children: [],
-      },
-      {
-        id: 13,
-        title: '整理到可执行的月度计划',
-        completed: false,
-        due: '明天 18:00',
-        priority: 'medium',
-        tags: ['规划'],
-        children: [],
-      },
-      {
-        id: 14,
-        title: '和自己确认最终版本',
-        completed: true,
-        due: '周五 18:00',
-        priority: 'low',
-        tags: [],
-        children: [],
-      },
-    ],
-  },
-  {
-    id: 2,
-    title: '准备周末的朋友聚会',
-    completed: false,
-    due: '周六 14:00',
-    priority: 'medium',
-    progress: '1 / 3',
-    tags: ['生活', '社交'],
-    children: [
-      {
-        id: 21,
-        title: '确认聚会地点和人数',
-        completed: true,
-        due: '周四 20:00',
-        priority: 'medium',
-        tags: [],
-        children: [],
-      },
-      {
-        id: 22,
-        title: '准备轻食和饮料清单',
-        completed: false,
-        due: '周五 12:00',
-        priority: 'low',
-        tags: ['采买'],
-        children: [],
-      },
-      {
-        id: 23,
-        title: '收拾客厅和阳台',
-        completed: false,
-        due: '周六 10:00',
-        priority: 'medium',
-        tags: [],
-        children: [],
-      },
-    ],
-  },
-  {
-    id: 3,
-    title: '阅读《设计中的设计》',
-    completed: false,
-    due: '下周一 21:00',
-    priority: 'low',
-    progress: '3 / 8',
-    tags: ['阅读', '长期'],
-    children: [],
-  },
-  {
-    id: 4,
-    title: '整理旧硬盘照片',
-    completed: true,
-    due: '9 月 20 日',
-    priority: 'low',
-    tags: ['归档'],
-    children: [],
-  },
-])
+const taskTree = ref([])
+const loading = ref(true)
+const errorMessage = ref('')
 
 const searchQuery = ref('')
 const activeFilter = ref('all')
 const sortKey = ref('due')
 const showCompleted = ref(false)
-const expandedIds = ref(new Set([1, 2]))
+const expandedIds = ref(new Set())
 const dialogVisible = ref(false)
 const newTaskTitle = ref('')
 const newTaskDue = ref('')
 const newTaskPriority = ref('medium')
+const newTaskDescription = ref('')
+const newTaskParentId = ref(null)
+const saving = ref(false)
+const availableTags = ref([])
+const priorityFilter = ref('')
+const tagFilter = ref('')
+const dueRange = ref([])
+const moveDialogVisible = ref(false)
+const moveTaskTarget = ref(null)
+const moveParentId = ref(null)
+const moving = ref(false)
 
 const summary = computed(() => {
   const allTasks = flattenTasks(taskTree.value)
@@ -152,6 +67,62 @@ const summary = computed(() => {
 
 const visibleTaskTree = computed(() => filterNodes(taskTree.value))
 
+const parentOptions = computed(() => {
+  const excluded = moveTaskTarget.value ? new Set([moveTaskTarget.value.id, ...flattenTasks(moveTaskTarget.value.children || []).map((task) => task.id)]) : new Set()
+  return flattenTasks(taskTree.value)
+    .filter((task) => !task.completed && task.depth < 5 && !excluded.has(task.id))
+    .map((task) => ({
+      id: task.id,
+      label: `${'　'.repeat(Math.max(0, task.depth - 1))}${task.title}`,
+    }))
+})
+
+const canShowCompleted = computed(() => showCompleted.value || activeFilter.value === 'completed')
+const hasAdvancedFilters = computed(() => Boolean(priorityFilter.value || tagFilter.value || dueRange.value?.length))
+
+async function loadTasks() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const [tasks, tags] = await Promise.all([getTasks({ includeCompleted: true }), getTags()])
+    taskTree.value = (Array.isArray(tasks) ? tasks : []).map(normalizeTask)
+    availableTags.value = Array.isArray(tags) ? tags : []
+  } catch (error) {
+    errorMessage.value = error.message
+  } finally {
+    loading.value = false
+  }
+}
+
+function normalizeTask(task) {
+  const dueDate = task.due_at ? new Date(task.due_at) : null
+  const dueTone = dueDate && !task.completed && dueDate.getTime() < Date.now() ? 'danger' : ''
+  return {
+    ...task,
+    due: dueDate ? formatDue(dueDate) : '无截止时间',
+    dueTone,
+    effectivePriority: task.effective_priority || task.priority,
+    progress: task.progress?.label || '',
+    children: (task.children || []).map(normalizeTask),
+  }
+}
+
+function formatDue(value) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(value)
+}
+
+function isDueToday(task) {
+  if (!task.due_at) return false
+  const due = new Date(task.due_at)
+  const now = new Date()
+  return due.getFullYear() === now.getFullYear() && due.getMonth() === now.getMonth() && due.getDate() === now.getDate()
+}
+
 function flattenTasks(nodes) {
   return nodes.flatMap((task) => [task, ...flattenTasks(task.children || [])])
 }
@@ -160,21 +131,35 @@ function taskMatches(task) {
   const query = searchQuery.value.trim().toLowerCase()
   const keywordMatches = !query || task.title.toLowerCase().includes(query)
 
-  if (activeFilter.value === 'completed') {
-    return task.completed && keywordMatches
+  if (activeFilter.value === 'completed' && !task.completed) return false
+  if (activeFilter.value === 'today' && (task.completed || !isDueToday(task))) return false
+  if (activeFilter.value === 'high' && (task.completed || !['urgent', 'high'].includes(task.effectivePriority || task.priority))) return false
+  if (priorityFilter.value && ![task.effectivePriority, task.priority].includes(priorityFilter.value)) {
+    return false
   }
-  if (activeFilter.value === 'today') {
-    return !task.completed && task.due?.includes('今天') && keywordMatches
+  if (tagFilter.value && !(task.tags || []).some((tag) => tag.toLowerCase() === tagFilter.value.toLowerCase())) {
+    return false
   }
-  if (activeFilter.value === 'high') {
-    return !task.completed && ['urgent', 'high'].includes(task.priority) && keywordMatches
+  if (dueRange.value?.length === 2 && task.due_at) {
+    const due = new Date(task.due_at).getTime()
+    const from = new Date(`${dueRange.value[0]}T00:00:00`).getTime()
+    const to = new Date(`${dueRange.value[1]}T23:59:59`).getTime()
+    if (due < from || due > to) return false
+  } else if (dueRange.value?.length === 2 && !task.due_at) {
+    return false
   }
-  return keywordMatches && (showCompleted.value || !task.completed)
+  return keywordMatches && (canShowCompleted.value || !task.completed)
 }
 
 function filterNodes(nodes) {
+  if (searchQuery.value.trim()) {
+    return flattenTasks(nodes)
+      .filter(taskMatches)
+      .map((task) => ({ ...task, children: [] }))
+      .sort(compareTasks)
+  }
   return nodes.reduce((result, task) => {
-    if (activeFilter.value !== 'completed' && !showCompleted.value && task.completed) {
+    if (!canShowCompleted.value && task.completed) {
       return result
     }
 
@@ -183,7 +168,34 @@ function filterNodes(nodes) {
       result.push({ ...task, children })
     }
     return result
-  }, [])
+  }, []).sort(compareTasks).map((task) => ({ ...task, children: sortTree(task.children) }))
+}
+
+function sortTree(nodes) {
+  return [...nodes].sort(compareTasks).map((task) => ({ ...task, children: sortTree(task.children || []) }))
+}
+
+function compareTasks(left, right) {
+  if (sortKey.value === 'priority') {
+    const priorityDiff = priorityRank(right.effectivePriority || right.priority) - priorityRank(left.effectivePriority || left.priority)
+    if (priorityDiff !== 0) return priorityDiff
+  } else if (sortKey.value === 'created') {
+    const createdDiff = new Date(right.created_at || right.createdAt).getTime() - new Date(left.created_at || left.createdAt).getTime()
+    if (createdDiff !== 0) return createdDiff
+  } else {
+    if (!left.due_at && right.due_at) return 1
+    if (left.due_at && !right.due_at) return -1
+    if (left.due_at && right.due_at) {
+      const dueDiff = new Date(left.due_at).getTime() - new Date(right.due_at).getTime()
+      if (dueDiff !== 0) return dueDiff
+    }
+  }
+  const priorityDiff = priorityRank(right.effectivePriority || right.priority) - priorityRank(left.effectivePriority || left.priority)
+  return priorityDiff || left.id - right.id
+}
+
+function priorityRank(priority) {
+  return { urgent: 4, high: 3, medium: 2, low: 1 }[priority] || 0
 }
 
 function findTask(id, nodes = taskTree.value) {
@@ -219,8 +231,28 @@ function setFilter(key) {
   if (key === 'completed') showCompleted.value = true
 }
 
+function clearAdvancedFilters() {
+  priorityFilter.value = ''
+  tagFilter.value = ''
+  dueRange.value = []
+}
+
 function openTask(task) {
   router.push({ name: 'task-detail', params: { id: task.id } })
+}
+
+function openCreateDialog(parent = null) {
+  newTaskTitle.value = ''
+  newTaskDue.value = parent?.due_at ? formatPickerDate(new Date(parent.due_at)) : ''
+  newTaskPriority.value = 'medium'
+  newTaskDescription.value = ''
+  newTaskParentId.value = parent?.id || null
+  dialogVisible.value = true
+}
+
+function formatPickerDate(value) {
+  const pad = (number) => String(number).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:00`
 }
 
 async function completeTask(task) {
@@ -245,11 +277,11 @@ async function completeTask(task) {
       confirmButtonText: '确认完成',
       cancelButtonText: '再想想',
     })
-    const source = findTask(task.id)
-    if (source) source.completed = true
+    await completeTaskRequest(task.id)
+    await loadTasks()
     ElMessage.success('任务已完成。')
-  } catch {
-    // 用户取消确认时保持当前状态。
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error.message)
   }
 }
 
@@ -259,11 +291,13 @@ async function handleCommand({ command, task }) {
     return
   }
   if (command === 'add-child') {
-    ElMessage.info('子任务表单将在任务 API 接入后开放。')
+    openCreateDialog(task)
     return
   }
   if (command === 'move') {
-    ElMessage.info('移动任务会在后端任务树规则接入后开放。')
+    moveTaskTarget.value = task
+    moveParentId.value = task.parent_id || null
+    moveDialogVisible.value = true
     return
   }
   if (command === 'delete') {
@@ -278,45 +312,59 @@ async function handleCommand({ command, task }) {
           confirmButtonClass: 'el-button--danger',
         },
       )
-      removeTask(task.id)
+      await deleteTaskRequest(task.id)
+      await loadTasks()
       ElMessage.success('任务已删除。')
-    } catch {
-      // 用户取消删除时保持当前状态。
+    } catch (error) {
+      if (error !== 'cancel' && error !== 'close') ElMessage.error(error.message)
     }
   }
 }
 
-function removeTask(id, nodes = taskTree.value) {
-  const index = nodes.findIndex((task) => task.id === id)
-  if (index >= 0) {
-    nodes.splice(index, 1)
-    return true
-  }
-  return nodes.some((task) => removeTask(id, task.children || []))
-}
-
-function createTask() {
+async function createTask() {
   const title = newTaskTitle.value.trim()
   if (!title) {
     ElMessage.warning('请先填写任务标题。')
     return
   }
 
-  taskTree.value.unshift({
-    id: Date.now(),
-    title,
-    completed: false,
-    due: newTaskDue.value.trim() || '无截止时间',
-    priority: newTaskPriority.value,
-    tags: [],
-    children: [],
-  })
-  dialogVisible.value = false
-  newTaskTitle.value = ''
-  newTaskDue.value = ''
-  newTaskPriority.value = 'medium'
-  ElMessage.success('任务已添加到当前页面。')
+  saving.value = true
+  try {
+    await createTaskRequest({
+      parent_id: newTaskParentId.value || null,
+      title,
+      description: newTaskDescription.value.trim(),
+      due_at: newTaskDue.value,
+      priority: newTaskPriority.value,
+      tags: [],
+      links: [],
+    })
+    dialogVisible.value = false
+    await loadTasks()
+    ElMessage.success('任务已保存。')
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    saving.value = false
+  }
 }
+
+async function saveMove() {
+  if (!moveTaskTarget.value) return
+  moving.value = true
+  try {
+    await moveTaskRequest(moveTaskTarget.value.id, moveParentId.value)
+    moveDialogVisible.value = false
+    await loadTasks()
+    ElMessage.success('任务已移动。')
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    moving.value = false
+  }
+}
+
+onMounted(loadTasks)
 </script>
 
 <template>
@@ -329,7 +377,7 @@ function createTask() {
       </div>
       <div class="page-heading-actions">
         <el-button class="soft-button" @click="expandAll"><Expand class="button-icon" />展开全部</el-button>
-        <el-button type="primary" @click="dialogVisible = true"><Plus class="button-icon" />新建任务</el-button>
+        <el-button type="primary" @click="openCreateDialog()"><Plus class="button-icon" />新建任务</el-button>
       </div>
     </section>
 
@@ -392,7 +440,25 @@ function createTask() {
             <el-option label="按创建时间" value="created" />
           </el-select>
           <el-switch v-model="showCompleted" inline-prompt active-text="已完成" inactive-text="隐藏" />
-          <el-button class="filter-button" circle aria-label="筛选"><Filter /></el-button>
+          <el-popover placement="bottom-end" :width="280" trigger="click">
+            <template #reference>
+              <el-button class="filter-button" :class="{ 'is-active': hasAdvancedFilters }" circle aria-label="筛选"><Filter /></el-button>
+            </template>
+            <div class="task-filter-popover">
+              <div class="task-filter-popover-title">高级筛选</div>
+              <el-select v-model="priorityFilter" clearable placeholder="优先级" class="full-width">
+                <el-option label="紧急" value="urgent" />
+                <el-option label="高优先级" value="high" />
+                <el-option label="中优先级" value="medium" />
+                <el-option label="低优先级" value="low" />
+              </el-select>
+              <el-select v-model="tagFilter" clearable filterable placeholder="标签" class="full-width">
+                <el-option v-for="tag in availableTags" :key="tag.id" :label="tag.name" :value="tag.name" />
+              </el-select>
+              <el-date-picker v-model="dueRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" class="full-width" />
+              <el-button text type="primary" @click="clearAdvancedFilters">清除筛选</el-button>
+            </div>
+          </el-popover>
         </div>
       </div>
 
@@ -402,13 +468,24 @@ function createTask() {
         <span>操作</span>
       </div>
 
-      <div v-if="visibleTaskTree.length > 0" class="task-tree-list">
+      <div v-if="loading" class="task-loading-state">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>正在加载任务…</span>
+      </div>
+
+      <div v-else-if="errorMessage" class="task-error-state">
+        <h3>任务暂时无法加载</h3>
+        <p>{{ errorMessage }}</p>
+        <el-button type="primary" @click="loadTasks">重新加载</el-button>
+      </div>
+
+      <div v-else-if="visibleTaskTree.length > 0" class="task-tree-list">
         <TaskRow
           v-for="task in visibleTaskTree"
           :key="task.id"
           :task="task"
           :expanded-ids="expandedIds"
-          :show-completed="showCompleted"
+          :show-completed="canShowCompleted"
           @toggle="toggleExpanded"
           @open="openTask"
           @complete="completeTask"
@@ -425,7 +502,7 @@ function createTask() {
 
       <div class="task-panel-footer">
         <span><Filter class="footer-icon" />当前显示 {{ visibleTaskTree.length }} 个顶层任务</span>
-        <span class="demo-disclaimer">界面预览数据 · 尚未连接任务 API</span>
+        <span class="demo-disclaimer">本地数据库 · 已连接任务 API</span>
       </div>
     </section>
 
@@ -437,7 +514,15 @@ function createTask() {
         </el-form-item>
         <div class="form-grid-two">
           <el-form-item label="截止时间">
-            <el-input v-model="newTaskDue" placeholder="例如：周五 18:00" />
+            <el-date-picker
+              v-model="newTaskDue"
+              type="datetime"
+              value-format="YYYY-MM-DD HH:mm:ss"
+              format="YYYY-MM-DD HH:mm"
+              placeholder="选择截止时间"
+              class="full-width"
+              clearable
+            />
           </el-form-item>
           <el-form-item label="优先级">
             <el-select v-model="newTaskPriority" class="full-width">
@@ -448,15 +533,38 @@ function createTask() {
             </el-select>
           </el-form-item>
         </div>
+        <el-form-item label="父任务">
+          <el-select v-model="newTaskParentId" class="full-width" filterable clearable placeholder="不选择则创建为顶层任务">
+            <el-option v-for="option in parentOptions" :key="option.id" :label="option.label" :value="option.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="任务说明">
+          <el-input v-model="newTaskDescription" type="textarea" :rows="3" placeholder="可选，补充任务背景和完成标准" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <div class="dialog-footer-actions">
-          <span>当前仅保留在页面内</span>
+          <span>保存后会写入本地数据库</span>
           <div>
             <el-button @click="dialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="createTask">添加任务</el-button>
+            <el-button type="primary" :loading="saving" @click="createTask">保存任务</el-button>
           </div>
         </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="moveDialogVisible" title="移动任务" width="520px" destroy-on-close>
+      <p class="dialog-lead">选择新的父任务；清空选择即可移动到顶层。</p>
+      <el-form label-position="top">
+        <el-form-item label="新父任务">
+          <el-select v-model="moveParentId" class="full-width" filterable clearable placeholder="顶层任务">
+            <el-option v-for="option in parentOptions" :key="option.id" :label="option.label" :value="option.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="moveDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="moving" @click="saveMove">保存移动</el-button>
       </template>
     </el-dialog>
   </div>
@@ -607,6 +715,24 @@ function createTask() {
 .filter-button.el-button {
   color: var(--ds-color-text-tertiary);
   border-color: var(--ds-color-border);
+}
+
+.filter-button.el-button.is-active {
+  color: var(--ds-color-primary);
+  background: var(--ds-color-primary-light);
+  border-color: var(--ds-color-primary-light);
+}
+
+.task-filter-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-filter-popover-title {
+  color: var(--ds-color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .task-list-head {
@@ -847,6 +973,34 @@ function createTask() {
 .task-empty-state p {
   margin: 0;
   color: var(--ds-color-text-tertiary);
+}
+
+.task-loading-state,
+.task-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  padding: 40px 20px;
+  color: var(--ds-color-text-tertiary);
+  text-align: center;
+}
+
+.task-loading-state .el-icon {
+  margin-bottom: 10px;
+  color: var(--ds-color-primary);
+  font-size: 22px;
+}
+
+.task-error-state h3 {
+  margin: 0 0 6px;
+  color: var(--ds-color-text-primary);
+  font-size: 16px;
+}
+
+.task-error-state p {
+  margin: 0 0 16px;
 }
 
 .task-panel-footer {

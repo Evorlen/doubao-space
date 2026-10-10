@@ -10,12 +10,13 @@ import {
   DataAnalysis,
   Timer,
 } from '@element-plus/icons-vue'
-import { getHealth } from '../api'
+import { getHealth, getTasks } from '../api'
 
 const router = useRouter()
 const health = ref(null)
 const healthLoading = ref(true)
 const healthError = ref('')
+const tasks = ref([])
 
 const todayLabel = computed(() => {
   return new Intl.DateTimeFormat('zh-CN', {
@@ -25,11 +26,18 @@ const todayLabel = computed(() => {
   }).format(new Date())
 })
 
-const stats = [
-  { label: '今日聚焦', value: '3', note: '1 项即将到期', icon: Timer, tone: 'blue' },
-  { label: '待完成任务', value: '8', note: '比昨天少 2 项', icon: Check, tone: 'green' },
-  { label: '本周日程', value: '5', note: '最近是周六聚会', icon: Calendar, tone: 'warm' },
-]
+const allTasks = computed(() => flattenTasks(tasks.value))
+
+const stats = computed(() => {
+  const incomplete = allTasks.value.filter((task) => !task.completed)
+  const today = incomplete.filter((task) => isDueToday(task))
+  const week = incomplete.filter((task) => isDueWithin(task, 7))
+  return [
+    { label: '今日聚焦', value: String(today.length), note: today.length ? `${today.length} 项今天到期` : '今天没有到期任务', icon: Timer, tone: 'blue' },
+    { label: '待完成任务', value: String(incomplete.length), note: '来自本地任务树', icon: Check, tone: 'green' },
+    { label: '本周到期', value: String(week.length), note: week.length ? '提前留出处理空间' : '本周没有到期任务', icon: Calendar, tone: 'warm' },
+  ]
+})
 
 const agenda = [
   { time: '09:30', title: '整理年度规划', type: '任务', tone: 'blue' },
@@ -37,11 +45,23 @@ const agenda = [
   { time: '18:00', title: '和自己确认计划', type: '任务', tone: 'green' },
 ]
 
-const focusItems = [
-  { title: '确定下半年的三个关键词', due: '今天 16:00', priority: '高优先级', tone: 'danger' },
-  { title: '整理到可执行的月度计划', due: '明天 18:00', priority: '中优先级', tone: 'warning' },
-  { title: '准备轻食和饮料清单', due: '周五 12:00', priority: '低优先级', tone: 'muted' },
-]
+const focusItems = computed(() => {
+  return allTasks.value
+    .filter((task) => !task.completed)
+    .sort((left, right) => {
+      if (!left.due_at && right.due_at) return 1
+      if (left.due_at && !right.due_at) return -1
+      if (left.due_at && right.due_at) return new Date(left.due_at).getTime() - new Date(right.due_at).getTime()
+      return left.id - right.id
+    })
+    .slice(0, 3)
+    .map((task) => ({
+      title: task.title,
+      due: task.due_at ? formatDue(new Date(task.due_at)) : '无截止时间',
+      priority: priorityLabel(task.effective_priority || task.priority),
+      tone: task.due_at && new Date(task.due_at).getTime() < Date.now() ? 'danger' : priorityTone(task.effective_priority || task.priority),
+    }))
+})
 
 async function refreshHealth() {
   healthLoading.value = true
@@ -56,11 +76,52 @@ async function refreshHealth() {
   }
 }
 
+async function refreshTasks() {
+  try {
+    tasks.value = await getTasks({ includeCompleted: true })
+  } catch {
+    tasks.value = []
+  }
+}
+
+function flattenTasks(nodes) {
+  return nodes.flatMap((task) => [task, ...flattenTasks(task.children || [])])
+}
+
+function isDueToday(task) {
+  if (!task.due_at) return false
+  const due = new Date(task.due_at)
+  const now = new Date()
+  return due.getFullYear() === now.getFullYear() && due.getMonth() === now.getMonth() && due.getDate() === now.getDate()
+}
+
+function isDueWithin(task, days) {
+  if (!task.due_at) return false
+  const due = new Date(task.due_at).getTime()
+  const now = Date.now()
+  return due >= now && due <= now + days * 24 * 60 * 60 * 1000
+}
+
+function formatDue(value) {
+  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(value)
+}
+
+function priorityLabel(priority) {
+  return { urgent: '紧急', high: '高优先级', medium: '中优先级', low: '低优先级' }[priority] || '中优先级'
+}
+
+function priorityTone(priority) {
+  return { urgent: 'danger', high: 'danger', medium: 'warning', low: 'muted' }[priority] || 'muted'
+}
+
 function goToTasks() {
   router.push('/dashboard/tasks')
 }
 
-onMounted(refreshHealth)
+onMounted(() => {
+  refreshHealth()
+  refreshTasks()
+})
 </script>
 
 <template>
@@ -115,17 +176,20 @@ onMounted(refreshHealth)
           <RouterLink to="/dashboard/tasks" class="muted-link">查看全部 <ArrowRight /></RouterLink>
         </div>
         <div class="focus-list">
-          <div v-for="item in focusItems" :key="item.title" class="focus-item">
-            <span class="focus-check"></span>
-            <div class="focus-item-main">
-              <div class="focus-item-title">{{ item.title }}</div>
-              <div class="focus-item-meta">
-                <span :class="`is-${item.tone}`"><Clock />{{ item.due }}</span>
-                <span>{{ item.priority }}</span>
+          <div v-if="focusItems.length === 0" class="focus-empty-state">还没有未完成任务，去任务页记录第一件事。</div>
+          <template v-else>
+            <div v-for="item in focusItems" :key="item.title" class="focus-item">
+              <span class="focus-check"></span>
+              <div class="focus-item-main">
+                <div class="focus-item-title">{{ item.title }}</div>
+                <div class="focus-item-meta">
+                  <span :class="`is-${item.tone}`"><Clock />{{ item.due }}</span>
+                  <span>{{ item.priority }}</span>
+                </div>
               </div>
+              <ArrowRight class="focus-item-arrow" />
             </div>
-            <ArrowRight class="focus-item-arrow" />
-          </div>
+          </template>
         </div>
       </div>
 
@@ -444,6 +508,12 @@ onMounted(refreshHealth)
 
 .focus-list {
   margin-top: 22px;
+}
+
+.focus-empty-state {
+  padding: 24px 0 12px;
+  color: var(--ds-color-text-tertiary);
+  font-size: 13px;
 }
 
 .focus-item {

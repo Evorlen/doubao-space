@@ -5,7 +5,7 @@ GO_ENTRY := ./cmd/doubao-space
 FRONTEND_DIR := web/frontend
 
 dev-backend:
-	go run $(GO_ENTRY) --dev
+	go run $(GO_ENTRY) --dev --addr 127.0.0.1:8081
 
 dev-frontend:
 	cd $(FRONTEND_DIR) && npm run dev

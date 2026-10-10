@@ -25,7 +25,7 @@ web/dist/               前端构建产物（发布时嵌入二进制）
 需要 Go、Node.js 和 npm。启动后端：
 
 ```bash
-go run ./cmd/doubao-space --dev
+go run ./cmd/doubao-space --dev --addr 127.0.0.1:8081
 ```
 
 另开一个终端启动前端：
@@ -36,7 +36,7 @@ npm ci
 npm run dev
 ```
 
-前端开发服务器会把 `/api` 请求代理到 `http://127.0.0.1:8080`。
+前端开发服务器会把 `/api` 请求代理到 `http://127.0.0.1:8081`。
 
 也可以使用 Make：
 
@@ -44,6 +44,16 @@ npm run dev
 make dev-backend
 make dev-frontend
 ```
+
+任务模块 API 已接入本地 SQLite，主要接口包括：
+
+- `GET /api/tasks`：任务树，支持 `include_completed`、`search`、`status`、`priority`、`tag` 和 `sort` 查询参数
+- `POST /api/tasks`：创建顶层任务或子任务
+- `GET/PUT/DELETE /api/tasks/:id`：查看、编辑和永久删除任务子树
+- `POST /api/tasks/:id/complete`：完成任务
+- `POST /api/tasks/:id/move`：移动任务并重新校验层级和期限规则
+- `POST/GET/DELETE /api/tasks/:id/attachments`：上传、下载和删除本地附件（单个文件最大 25 MB）
+- `GET/POST /api/tags`：读取和创建标签
 
 ## 构建
 
