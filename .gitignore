@@ -9,6 +9,7 @@
 *.dylib
 /build/
 /data/
+.tools/
 /web/frontend/node_modules/
 
 # Vite output. Keep the bootstrap file so the Go package can compile
