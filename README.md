@@ -75,6 +75,12 @@ make dev-frontend
 - `GET/PUT/DELETE /api/plans/:id`：查看、编辑或删除周期计划
 - `POST /api/plans/:id/complete`：完成计划，并从完成当天重新计算下一次提醒
 
+娱乐模块用于管理小说、电视剧和电影，主要接口包括：
+
+- `GET /api/entertainment`：读取作品列表和汇总统计，支持 `type`、`status`、`search`、`rating`、`favorite` 和 `sort` 筛选
+- `POST /api/entertainment`：新增作品，并记录类型、状态、进度、评分、标签和个人评价
+- `GET/PUT/DELETE /api/entertainment/:id`：查看、编辑或删除作品
+
 ## 构建
 
 构建前端并生成当前平台二进制：

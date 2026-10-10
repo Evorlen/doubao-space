@@ -189,3 +189,39 @@ export function completePlan(id) {
 export function deletePlan(id) {
   return request(`/api/plans/${id}`, { method: 'DELETE' })
 }
+
+export function getEntertainment(options = {}) {
+  const params = new URLSearchParams()
+  if (options.type) params.set('type', options.type)
+  if (options.status) params.set('status', options.status)
+  if (options.search) params.set('search', options.search)
+  if (options.rating) params.set('rating', options.rating)
+  if (options.favorite) params.set('favorite', 'true')
+  if (options.sort) params.set('sort', options.sort)
+  const query = params.toString()
+  return request(`/api/entertainment${query ? `?${query}` : ''}`)
+}
+
+export function getEntertainmentItem(id) {
+  return request(`/api/entertainment/${id}`)
+}
+
+export function createEntertainmentItem(item) {
+  return request('/api/entertainment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  })
+}
+
+export function updateEntertainmentItem(id, item) {
+  return request(`/api/entertainment/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  })
+}
+
+export function deleteEntertainmentItem(id) {
+  return request(`/api/entertainment/${id}`, { method: 'DELETE' })
+}

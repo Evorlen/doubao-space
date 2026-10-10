@@ -263,3 +263,65 @@ func TestPersonalPlanRoutes(t *testing.T) {
 		t.Fatalf("delete personal plan status = %d, body = %s", remove.Code, remove.Body.String())
 	}
 }
+
+func TestEntertainmentRoutes(t *testing.T) {
+	db, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer db.Close()
+
+	router := NewRouter(db, "test", true)
+	create := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/entertainment", bytes.NewBufferString(`{"media_type":"movie","title":"海街日记","creator":"是枝裕和","status":"planned","rating":5,"favorite":true,"tags":["治愈"]}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(create, request)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create entertainment item status = %d, body = %s", create.Code, create.Body.String())
+	}
+	var created struct {
+		ID             int64  `json:"id"`
+		MediaTypeLabel string `json:"media_type_label"`
+		Rating         int    `json:"rating"`
+	}
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created entertainment item: %v", err)
+	}
+	if created.ID == 0 || created.MediaTypeLabel != "电影" || created.Rating != 5 {
+		t.Fatalf("created entertainment item = %#v", created)
+	}
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/entertainment?type=movie&favorite=true", nil))
+	if list.Code != http.StatusOK {
+		t.Fatalf("list entertainment items status = %d, body = %s", list.Code, list.Body.String())
+	}
+	var response struct {
+		Items []struct {
+			ID int64 `json:"id"`
+		} `json:"items"`
+		Stats struct {
+			Total int `json:"total"`
+		} `json:"stats"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode entertainment response: %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].ID != created.ID || response.Stats.Total != 1 {
+		t.Fatalf("entertainment response = %#v", response)
+	}
+
+	update := httptest.NewRecorder()
+	updateRequest := httptest.NewRequest(http.MethodPut, "/api/entertainment/"+strconv.FormatInt(created.ID, 10), bytes.NewBufferString(`{"media_type":"movie","title":"海街日记","creator":"是枝裕和","status":"completed","rating":5,"favorite":true,"review":"很温柔。"}`))
+	updateRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(update, updateRequest)
+	if update.Code != http.StatusOK {
+		t.Fatalf("update entertainment item status = %d, body = %s", update.Code, update.Body.String())
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(http.MethodDelete, "/api/entertainment/"+strconv.FormatInt(created.ID, 10), nil))
+	if remove.Code != http.StatusNoContent {
+		t.Fatalf("delete entertainment item status = %d, body = %s", remove.Code, remove.Body.String())
+	}
+}

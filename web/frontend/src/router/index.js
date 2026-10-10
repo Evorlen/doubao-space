@@ -57,13 +57,17 @@ const router = createRouter({
           },
         },
         {
-          path: 'notes',
-          name: 'notes',
-          component: () => import('../views/NotesView.vue'),
+          path: 'entertainment',
+          name: 'entertainment',
+          component: () => import('../views/EntertainmentView.vue'),
           meta: {
-            title: '内容收集',
-            description: '先收下来，再慢慢整理成自己的东西。',
+            title: '娱乐',
+            description: '把想读、想看和已经喜欢的作品放在一起。',
           },
+        },
+        {
+          path: 'notes',
+          redirect: '/dashboard/entertainment',
         },
         {
           path: 'settings',

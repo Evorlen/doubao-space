@@ -4,7 +4,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   Calendar,
   CircleCheck,
-  Collection,
+  Film,
   HomeFilled,
   List,
   Search,
@@ -19,7 +19,7 @@ const navigation = [
   { label: '任务', to: '/dashboard/tasks', icon: List },
   { label: '豆包日历', to: '/dashboard/calendar', icon: Calendar },
   { label: '个人计划', to: '/dashboard/plans', icon: CircleCheck },
-  { label: '内容收集', to: '/dashboard/notes', icon: Collection },
+  { label: '娱乐', to: '/dashboard/entertainment', icon: Film },
 ]
 
 const pageTitle = computed(() => route.meta.title || '豆包空间')
