@@ -101,3 +101,27 @@ export function createTag(name) {
     body: JSON.stringify({ name }),
   })
 }
+
+export function getRecipe() {
+  return request('/api/recipes')
+}
+
+export function createRecipeFood(food) {
+  return request('/api/recipes/foods', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(food),
+  })
+}
+
+export function updateRecipeFood(id, food) {
+  return request(`/api/recipes/foods/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(food),
+  })
+}
+
+export function deleteRecipeFood(id) {
+  return request(`/api/recipes/foods/${id}`, { method: 'DELETE' })
+}

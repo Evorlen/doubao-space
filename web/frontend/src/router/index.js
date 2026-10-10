@@ -43,8 +43,8 @@ const router = createRouter({
           name: 'calendar',
           component: () => import('../views/CalendarView.vue'),
           meta: {
-            title: '日程管理',
-            description: '让时间有安排，也留有余地。',
+            title: '豆包日历',
+            description: '照顾豆包的每一天，也把安排变得轻松。',
           },
         },
         {
