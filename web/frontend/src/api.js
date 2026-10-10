@@ -157,3 +157,35 @@ export function completeSchedule(id) {
 export function deleteSchedule(id) {
   return request(`/api/schedules/${id}`, { method: 'DELETE' })
 }
+
+export function getPlans() {
+  return request('/api/plans')
+}
+
+export function getPlan(id) {
+  return request(`/api/plans/${id}`)
+}
+
+export function createPlan(plan) {
+  return request('/api/plans', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(plan),
+  })
+}
+
+export function updatePlan(id, plan) {
+  return request(`/api/plans/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(plan),
+  })
+}
+
+export function completePlan(id) {
+  return request(`/api/plans/${id}/complete`, { method: 'POST' })
+}
+
+export function deletePlan(id) {
+  return request(`/api/plans/${id}`, { method: 'DELETE' })
+}

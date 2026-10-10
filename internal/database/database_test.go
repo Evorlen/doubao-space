@@ -22,7 +22,7 @@ func TestOpenAppliesMigrations(t *testing.T) {
 		t.Fatalf("app_name = %q, want %q", appName, "豆包空间")
 	}
 	var migrationCount int
-	if err := db.QueryRow(`SELECT COUNT(1) FROM schema_migrations WHERE version = 5`).Scan(&migrationCount); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(1) FROM schema_migrations WHERE version = 6`).Scan(&migrationCount); err != nil {
 		db.Close()
 		t.Fatalf("read schema migration: %v", err)
 	}
@@ -56,6 +56,15 @@ func TestOpenAppliesMigrations(t *testing.T) {
 	if scheduleTableCount != 2 {
 		db.Close()
 		t.Fatalf("schedule table count = %d, want 2", scheduleTableCount)
+	}
+	var personalPlanTableCount int
+	if err := db.QueryRow(`SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name IN ('personal_plans', 'personal_plan_completions')`).Scan(&personalPlanTableCount); err != nil {
+		db.Close()
+		t.Fatalf("read personal plan tables: %v", err)
+	}
+	if personalPlanTableCount != 2 {
+		db.Close()
+		t.Fatalf("personal plan table count = %d, want 2", personalPlanTableCount)
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("close database: %v", err)

@@ -2,6 +2,7 @@ package schedules
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -9,20 +10,36 @@ import (
 )
 
 type Handler struct {
-	service *Service
+	service      *Service
+	resourcePath string
+	resourceName string
 }
 
 func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+	return newResourceHandler(service, "schedules", "日程")
+}
+
+func NewPlanHandler(service *Service) *Handler {
+	return newResourceHandler(service, "plans", "计划")
+}
+
+func newResourceHandler(service *Service, resourcePath, resourceName string) *Handler {
+	return &Handler{
+		service:      service,
+		resourcePath: resourcePath,
+		resourceName: resourceName,
+	}
 }
 
 func (h *Handler) Register(router *gin.RouterGroup) {
-	router.GET("/schedules", h.list)
-	router.POST("/schedules", h.create)
-	router.GET("/schedules/:id", h.get)
-	router.PUT("/schedules/:id", h.update)
-	router.POST("/schedules/:id/complete", h.complete)
-	router.DELETE("/schedules/:id", h.delete)
+	resourcePath := "/" + h.resourcePath
+	itemPath := resourcePath + "/:id"
+	router.GET(resourcePath, h.list)
+	router.POST(resourcePath, h.create)
+	router.GET(itemPath, h.get)
+	router.PUT(itemPath, h.update)
+	router.POST(itemPath+"/complete", h.complete)
+	router.DELETE(itemPath, h.delete)
 }
 
 type schedulePayload struct {
@@ -35,7 +52,7 @@ type schedulePayload struct {
 func (h *Handler) list(c *gin.Context) {
 	plan, err := h.service.GetPlan(c.Request.Context())
 	if err != nil {
-		writeError(c, err)
+		h.writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, plan)
@@ -48,27 +65,27 @@ func (h *Handler) create(c *gin.Context) {
 	}
 	schedule, err := h.service.Create(c.Request.Context(), payload)
 	if err != nil {
-		writeError(c, err)
+		h.writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, schedule)
 }
 
 func (h *Handler) get(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := h.parseID(c)
 	if !ok {
 		return
 	}
 	schedule, err := h.service.Get(c.Request.Context(), id)
 	if err != nil {
-		writeError(c, err)
+		h.writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, schedule)
 }
 
 func (h *Handler) update(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := h.parseID(c)
 	if !ok {
 		return
 	}
@@ -78,32 +95,32 @@ func (h *Handler) update(c *gin.Context) {
 	}
 	schedule, err := h.service.Update(c.Request.Context(), id, payload)
 	if err != nil {
-		writeError(c, err)
+		h.writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, schedule)
 }
 
 func (h *Handler) complete(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := h.parseID(c)
 	if !ok {
 		return
 	}
 	schedule, err := h.service.Complete(c.Request.Context(), id)
 	if err != nil {
-		writeError(c, err)
+		h.writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, schedule)
 }
 
 func (h *Handler) delete(c *gin.Context) {
-	id, ok := parseID(c)
+	id, ok := h.parseID(c)
 	if !ok {
 		return
 	}
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
-		writeError(c, err)
+		h.writeError(c, err)
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -123,16 +140,16 @@ func bindPayload(c *gin.Context) (ScheduleInput, bool) {
 	}, true
 }
 
-func parseID(c *gin.Context) (int64, bool) {
+func (h *Handler) parseID(c *gin.Context) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "日程 ID 不正确"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s ID 不正确", h.resourceName)})
 		return 0, false
 	}
 	return id, true
 }
 
-func writeError(c *gin.Context, err error) {
+func (h *Handler) writeError(c *gin.Context, err error) {
 	status := http.StatusInternalServerError
 	message := "服务器暂时无法完成这个操作"
 	var validation *ValidationError
@@ -140,7 +157,7 @@ func writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		status = http.StatusNotFound
-		message = "没有找到这项日程"
+		message = fmt.Sprintf("没有找到这项%s", h.resourceName)
 	case errors.As(err, &validation):
 		status = http.StatusBadRequest
 		message = validation.Message

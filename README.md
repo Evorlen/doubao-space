@@ -68,6 +68,13 @@ make dev-frontend
 - `GET/PUT/DELETE /api/schedules/:id`：查看、编辑或删除周期日程
 - `POST /api/schedules/:id/complete`：完成日程，并从完成当天重新计算下一次提醒
 
+个人计划支持管理需要周期打卡的事情，主要接口包括：
+
+- `GET /api/plans`：读取今天提醒、逾期状态和下一次计划日期
+- `POST /api/plans`：设置计划名称、开始日期和间隔天数
+- `GET/PUT/DELETE /api/plans/:id`：查看、编辑或删除周期计划
+- `POST /api/plans/:id/complete`：完成计划，并从完成当天重新计算下一次提醒
+
 ## 构建
 
 构建前端并生成当前平台二进制：

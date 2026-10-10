@@ -57,6 +57,8 @@ func NewRouterWithDataDir(db *sql.DB, version string, dev bool, dataDir string) 
 	recipeHandler.Register(router.Group("/api"))
 	scheduleHandler := schedules.NewHandler(schedules.NewService(db))
 	scheduleHandler.Register(router.Group("/api"))
+	planHandler := schedules.NewPlanHandler(schedules.NewPersonalService(db))
+	planHandler.Register(router.Group("/api"))
 
 	staticServer := http.FileServer(http.FS(web.DistFS))
 	router.NoRoute(func(c *gin.Context) {

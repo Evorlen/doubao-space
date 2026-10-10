@@ -18,7 +18,69 @@ import {
   deleteSchedule,
   getSchedules,
   updateSchedule,
+  completePlan,
+  createPlan,
+  deletePlan,
+  getPlans,
+  updatePlan,
 } from '../../api'
+
+const props = defineProps({
+  variant: {
+    type: String,
+    default: 'doubao',
+  },
+})
+
+const isPersonal = computed(() => props.variant === 'personal')
+const copy = computed(() => {
+  if (isPersonal.value) {
+    return {
+      eyebrow: 'PERSONAL PLAN',
+      heading: '个人计划',
+      description: '把阅读、运动、学习等需要周期打卡的事情交给计划记住。',
+      kind: '计划',
+      refresh: '刷新计划',
+      add: '添加计划',
+      errorPrefix: '计划暂时无法读取',
+      cycleLabel: '周期计划',
+      emptyAdd: '添加第一个周期计划',
+      itemPlaceholder: '例如：阅读、运动、学习英语',
+      notePlaceholder: '例如：每次完成后记下进度，给自己一点反馈',
+      example: '例如从今天开始、每 7 天运动一次，完成后再从完成日重新计算。',
+      addedSuccess: '计划已加入个人计划。',
+      dueNote: '今天完成这件事，让自己离目标更近一点。',
+      emptyDueTitle: '今天没有需要处理的计划',
+      emptyDueDescription: '可以放心做自己的事，下一次提醒会按计划出现。',
+      upcomingEmpty: '当前计划都在今天的提醒里。',
+      ruleTitle: '计划规则很简单',
+      ruleDescription: '逾期不会被跳过；完成当天会成为新的起点，下一次提醒从这一天往后计算间隔天数。',
+      dialogIntro: '设置一件需要周期完成的事，计划会自动算出下一次提醒。',
+    }
+  }
+  return {
+    eyebrow: 'DOUBAO SCHEDULE',
+    heading: '豆包日程',
+    description: '把剪指甲、驱虫、清理猫砂盆这类周期事情交给日历记住。',
+    kind: '日程',
+    refresh: '刷新日程',
+    add: '添加日程',
+    errorPrefix: '日程暂时无法读取',
+    cycleLabel: '周期日程',
+    emptyAdd: '添加第一个周期日程',
+    itemPlaceholder: '例如：剪指甲、驱虫、清理猫砂盆',
+    notePlaceholder: '例如：洗完澡后剪，或记得准备零食安抚豆包',
+    example: '例如从今天开始、每 30 天剪一次指甲，完成后再从完成日重新计算。',
+    addedSuccess: '日程已加入豆包日历。',
+    dueNote: '今天完成这件事，豆包会更舒服。',
+    emptyDueTitle: '今天没有需要处理的日程',
+    emptyDueDescription: '可以放心做自己的事，下一次提醒会按计划出现。',
+    upcomingEmpty: '当前日程都在今天的提醒里。',
+    ruleTitle: '提醒规则很简单',
+    ruleDescription: '逾期不会被跳过；完成当天会成为新的起点，下一次提醒从这一天往后计算间隔天数。',
+    dialogIntro: '设置一件豆包需要定期完成的事，日历会自动算出下一次提醒。',
+  }
+})
 
 const plan = ref({ today: '', today_label: '', schedules: [], due_count: 0, upcoming_count: 0 })
 const loading = ref(true)
@@ -34,8 +96,28 @@ const schedules = computed(() => plan.value.schedules || [])
 const dueSchedules = computed(() => schedules.value.filter((schedule) => schedule.is_due))
 const upcomingSchedules = computed(() => schedules.value.filter((schedule) => !schedule.is_due))
 const nextSchedule = computed(() => upcomingSchedules.value[0] || null)
-const dialogTitle = computed(() => (editingId.value ? '编辑日程' : '添加日程'))
+const dialogTitle = computed(() => (editingId.value ? `编辑${copy.value.kind}` : `添加${copy.value.kind}`))
 const todayLabel = computed(() => plan.value.today_label || '今天')
+
+function getPlanData() {
+  return isPersonal.value ? getPlans() : getSchedules()
+}
+
+function updatePlanData(id, payload) {
+  return isPersonal.value ? updatePlan(id, payload) : updateSchedule(id, payload)
+}
+
+function createPlanData(payload) {
+  return isPersonal.value ? createPlan(payload) : createSchedule(payload)
+}
+
+function completePlanData(id) {
+  return isPersonal.value ? completePlan(id) : completeSchedule(id)
+}
+
+function deletePlanData(id) {
+  return isPersonal.value ? deletePlan(id) : deleteSchedule(id)
+}
 
 function createEmptyForm() {
   return {
@@ -77,7 +159,7 @@ async function loadSchedules() {
   loading.value = true
   loadError.value = ''
   try {
-    plan.value = await getSchedules()
+    plan.value = await getPlanData()
   } catch (error) {
     plan.value = { today: '', today_label: '', schedules: [], due_count: 0, upcoming_count: 0 }
     loadError.value = error.message
@@ -105,7 +187,7 @@ function openEdit(schedule) {
 
 async function saveSchedule() {
   if (!form.value.title.trim()) {
-    ElMessage.warning('请先填写日程名称。')
+    ElMessage.warning(`请先填写${copy.value.kind}名称。`)
     return
   }
   if (!form.value.start_date) {
@@ -126,11 +208,11 @@ async function saveSchedule() {
       start_date: form.value.start_date,
       interval_days: Number(form.value.interval_days),
     }
-    if (wasEditing) await updateSchedule(editingId.value, payload)
-    else await createSchedule(payload)
+    if (wasEditing) await updatePlanData(editingId.value, payload)
+    else await createPlanData(payload)
     await loadSchedules()
     dialogVisible.value = false
-    ElMessage.success(wasEditing ? '日程已更新。' : '日程已加入豆包日历。')
+    ElMessage.success(wasEditing ? `${copy.value.kind}已更新。` : copy.value.addedSuccess)
   } catch (error) {
     ElMessage.error(error.message)
   } finally {
@@ -141,7 +223,7 @@ async function saveSchedule() {
 async function complete(schedule) {
   completingId.value = schedule.id
   try {
-    const updated = await completeSchedule(schedule.id)
+    const updated = await completePlanData(schedule.id)
     await loadSchedules()
     ElMessage.success(`“${schedule.title}”已完成，下次提醒是 ${formatDateLabel(updated.next_due_date)}。`)
   } catch (error) {
@@ -155,7 +237,7 @@ async function removeSchedule(schedule) {
   try {
     await ElMessageBox.confirm(
       `删除“${schedule.title}”后，它的周期提醒和完成记录都会移除。`,
-      '删除日程',
+      `删除${copy.value.kind}`,
       { confirmButtonText: '删除', cancelButtonText: '保留', type: 'warning' },
     )
   } catch {
@@ -164,9 +246,9 @@ async function removeSchedule(schedule) {
 
   deletingId.value = schedule.id
   try {
-    await deleteSchedule(schedule.id)
+    await deletePlanData(schedule.id)
     await loadSchedules()
-    ElMessage.success('日程已删除。')
+    ElMessage.success(`${copy.value.kind}已删除。`)
   } catch (error) {
     ElMessage.error(error.message)
   } finally {
@@ -178,26 +260,26 @@ onMounted(loadSchedules)
 </script>
 
 <template>
-  <section id="doubao-schedule" class="schedule-section">
+  <section :id="isPersonal ? 'personal-plans' : 'doubao-schedule'" class="schedule-section" :class="{ 'is-personal': isPersonal }">
     <div class="schedule-section-heading">
       <div>
-        <p class="schedule-eyebrow">DOUBAO SCHEDULE</p>
-        <h2>豆包日程</h2>
-        <p>把剪指甲、驱虫、清理猫砂盆这类周期事情交给日历记住。</p>
+        <p class="schedule-eyebrow">{{ copy.eyebrow }}</p>
+        <h2>{{ copy.heading }}</h2>
+        <p>{{ copy.description }}</p>
       </div>
       <div class="schedule-heading-actions">
         <el-button class="soft-button" :loading="loading" @click="loadSchedules">
-          <Refresh class="button-icon" />刷新日程
+          <Refresh class="button-icon" />{{ copy.refresh }}
         </el-button>
         <el-button type="primary" @click="openCreate">
-          <Plus class="button-icon" />添加日程
+          <Plus class="button-icon" />{{ copy.add }}
         </el-button>
       </div>
     </div>
 
     <div v-if="loadError" class="schedule-error" role="alert">
       <WarningFilled />
-      <span>日程暂时无法读取：{{ loadError }}</span>
+      <span>{{ copy.errorPrefix }}：{{ loadError }}</span>
       <el-button text type="primary" @click="loadSchedules">重新加载</el-button>
     </div>
 
@@ -207,13 +289,13 @@ onMounted(loadSchedules)
         <div>
           <span>今天要做</span>
           <strong>{{ plan.due_count }}</strong>
-          <small>{{ plan.due_count ? '逾期也会继续提醒' : '今天没有待处理日程' }}</small>
+          <small>{{ plan.due_count ? '逾期也会继续提醒' : `今天没有待处理${copy.kind}` }}</small>
         </div>
       </div>
       <div class="surface-card schedule-summary-card is-total">
         <div class="schedule-summary-icon"><Calendar /></div>
         <div>
-          <span>周期日程</span>
+          <span>{{ copy.cycleLabel }}</span>
           <strong>{{ schedules.length }}</strong>
           <small>{{ todayLabel }} · 本地保存</small>
         </div>
@@ -223,7 +305,7 @@ onMounted(loadSchedules)
         <div>
           <span>下一个提醒</span>
           <strong>{{ nextSchedule ? formatDateLabel(nextSchedule.next_due_date) : '—' }}</strong>
-          <small>{{ nextSchedule ? nextSchedule.title : '添加第一个周期日程' }}</small>
+          <small>{{ nextSchedule ? nextSchedule.title : copy.emptyAdd }}</small>
         </div>
       </div>
     </div>
@@ -252,18 +334,18 @@ onMounted(loadSchedules)
                 <strong>{{ schedule.title }}</strong>
                 <span class="due-item-label">{{ dueLabel(schedule) }}</span>
               </div>
-              <p>{{ schedule.note || '今天完成这件事，豆包会更舒服。' }}</p>
+              <p>{{ schedule.note || copy.dueNote }}</p>
               <div class="due-item-meta">
                 <span>原提醒日 {{ formatDateLabel(schedule.next_due_date) }}</span>
                 <span>{{ intervalLabel(schedule.interval_days) }}</span>
               </div>
             </div>
             <div class="due-item-actions">
-              <button type="button" title="编辑日程" aria-label="编辑日程" @click="openEdit(schedule)"><Edit /></button>
+              <button type="button" :title="`编辑${copy.kind}`" :aria-label="`编辑${copy.kind}`" @click="openEdit(schedule)"><Edit /></button>
               <button
                 type="button"
-                title="删除日程"
-                aria-label="删除日程"
+                :title="`删除${copy.kind}`"
+                :aria-label="`删除${copy.kind}`"
                 :disabled="deletingId === schedule.id"
                 @click="removeSchedule(schedule)"
               ><Delete /></button>
@@ -275,9 +357,9 @@ onMounted(loadSchedules)
         </div>
         <div v-else class="schedule-empty-state">
           <div class="schedule-empty-icon"><Check /></div>
-          <strong>{{ schedules.length ? '今天没有需要处理的日程' : '还没有周期日程' }}</strong>
-          <p>{{ schedules.length ? '可以放心做自己的事，下一次提醒会按计划出现。' : '先添加一件豆包需要定期做的事。' }}</p>
-          <el-button v-if="!schedules.length" text type="primary" @click="openCreate">添加第一件事</el-button>
+          <strong>{{ schedules.length ? copy.emptyDueTitle : `还没有周期${copy.kind}` }}</strong>
+          <p>{{ schedules.length ? copy.emptyDueDescription : `先添加一件需要定期完成的${copy.kind}。` }}</p>
+          <el-button v-if="!schedules.length" text type="primary" @click="openCreate">{{ copy.emptyAdd }}</el-button>
         </div>
       </div>
 
@@ -302,11 +384,11 @@ onMounted(loadSchedules)
               <span>{{ intervalLabel(schedule.interval_days) }}<template v-if="schedule.last_completed_on"> · 上次 {{ formatDateLabel(schedule.last_completed_on) }} 完成</template></span>
             </div>
             <div class="upcoming-item-actions">
-              <button type="button" title="编辑日程" aria-label="编辑日程" @click="openEdit(schedule)"><Edit /></button>
+              <button type="button" :title="`编辑${copy.kind}`" :aria-label="`编辑${copy.kind}`" @click="openEdit(schedule)"><Edit /></button>
               <button
                 type="button"
-                title="删除日程"
-                aria-label="删除日程"
+                :title="`删除${copy.kind}`"
+                :aria-label="`删除${copy.kind}`"
                 :disabled="deletingId === schedule.id"
                 @click="removeSchedule(schedule)"
               ><Delete /></button>
@@ -314,7 +396,7 @@ onMounted(loadSchedules)
           </article>
         </div>
         <div v-else class="upcoming-empty">
-          <span>{{ schedules.length ? '当前日程都在今天的提醒里。' : '添加周期日程后，下一次日期会显示在这里。' }}</span>
+          <span>{{ schedules.length ? copy.upcomingEmpty : `添加周期${copy.kind}后，下一次日期会显示在这里。` }}</span>
         </div>
       </div>
     </div>
@@ -322,16 +404,16 @@ onMounted(loadSchedules)
     <div class="schedule-rule-strip">
       <div class="schedule-rule-icon"><Clock /></div>
       <div>
-        <strong>提醒规则很简单</strong>
-        <p>逾期不会被跳过；完成当天会成为新的起点，下一次提醒从这一天往后计算间隔天数。</p>
+        <strong>{{ copy.ruleTitle }}</strong>
+        <p>{{ copy.ruleDescription }}</p>
       </div>
     </div>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="520px" destroy-on-close>
-      <div class="schedule-dialog-intro">设置一件豆包需要定期完成的事，日历会自动算出下一次提醒。</div>
+      <div class="schedule-dialog-intro">{{ copy.dialogIntro }}</div>
       <el-form class="schedule-form" label-position="top" @submit.prevent="saveSchedule">
-        <el-form-item label="日程名称" required>
-          <el-input v-model="form.title" maxlength="100" show-word-limit placeholder="例如：剪指甲、驱虫、清理猫砂盆" />
+        <el-form-item :label="`${copy.kind}名称`" required>
+          <el-input v-model="form.title" maxlength="100" show-word-limit :placeholder="copy.itemPlaceholder" />
         </el-form-item>
         <div class="schedule-form-row">
           <el-form-item label="从哪一天开始" required>
@@ -349,15 +431,15 @@ onMounted(loadSchedules)
         </div>
         <div class="schedule-form-example">
           <Calendar />
-          <span>例如从今天开始、每 30 天一次，第一次提醒就是今天；完成后再从完成日重新计算。</span>
+          <span>{{ copy.example }}</span>
         </div>
         <el-form-item label="备注">
-          <el-input v-model="form.note" type="textarea" :rows="3" maxlength="300" show-word-limit placeholder="例如：洗完澡后剪，或记得准备零食安抚豆包" />
+          <el-input v-model="form.note" type="textarea" :rows="3" maxlength="300" show-word-limit :placeholder="copy.notePlaceholder" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveSchedule">保存日程</el-button>
+        <el-button type="primary" :loading="saving" @click="saveSchedule">保存{{ copy.kind }}</el-button>
       </template>
     </el-dialog>
   </section>

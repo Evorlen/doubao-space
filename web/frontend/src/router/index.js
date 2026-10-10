@@ -48,6 +48,15 @@ const router = createRouter({
           },
         },
         {
+          path: 'plans',
+          name: 'plans',
+          component: () => import('../views/PersonalPlansView.vue'),
+          meta: {
+            title: '个人计划',
+            description: '把周期性的小事交给计划记住。',
+          },
+        },
+        {
           path: 'notes',
           name: 'notes',
           component: () => import('../views/NotesView.vue'),

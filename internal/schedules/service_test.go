@@ -140,3 +140,35 @@ func TestScheduleValidationAndDeleteCascade(t *testing.T) {
 		t.Fatalf("deleted completion history count = %d, want 0", completionCount)
 	}
 }
+
+func TestPersonalServiceUsesSeparateTables(t *testing.T) {
+	db, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer db.Close()
+
+	service := NewPersonalService(db)
+	plan, err := service.Create(context.Background(), ScheduleInput{
+		Title:        "运动",
+		StartDate:    "2020-01-01",
+		IntervalDays: 3,
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if plan.Title != "运动" || !plan.IsDue {
+		t.Fatalf("personal plan = %#v", plan)
+	}
+
+	var personalCount, scheduleCount int
+	if err := db.QueryRow(`SELECT COUNT(1) FROM personal_plans`).Scan(&personalCount); err != nil {
+		t.Fatalf("read personal plans: %v", err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(1) FROM doubao_schedules`).Scan(&scheduleCount); err != nil {
+		t.Fatalf("read doubao schedules: %v", err)
+	}
+	if personalCount != 1 || scheduleCount != 0 {
+		t.Fatalf("personal count = %d, schedule count = %d", personalCount, scheduleCount)
+	}
+}

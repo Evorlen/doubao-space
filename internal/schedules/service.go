@@ -78,11 +78,29 @@ type rowScanner interface {
 }
 
 type Service struct {
-	db *sql.DB
+	db              *sql.DB
+	scheduleTable   string
+	completionTable string
+	completionKey   string
+	resourceName    string
 }
 
 func NewService(db *sql.DB) *Service {
-	return &Service{db: db}
+	return newScopedService(db, "doubao_schedules", "doubao_schedule_completions", "schedule_id", "日程")
+}
+
+func NewPersonalService(db *sql.DB) *Service {
+	return newScopedService(db, "personal_plans", "personal_plan_completions", "plan_id", "计划")
+}
+
+func newScopedService(db *sql.DB, scheduleTable, completionTable, completionKey, resourceName string) *Service {
+	return &Service{
+		db:              db,
+		scheduleTable:   scheduleTable,
+		completionTable: completionTable,
+		completionKey:   completionKey,
+		resourceName:    resourceName,
+	}
 }
 
 func (s *Service) GetPlan(ctx context.Context) (*Plan, error) {
@@ -137,40 +155,40 @@ func (s *Service) Get(ctx context.Context, id int64) (*Schedule, error) {
 }
 
 func (s *Service) Create(ctx context.Context, input ScheduleInput) (*Schedule, error) {
-	normalized, err := normalizeInput(input)
+	normalized, err := normalizeInput(input, s.resourceName)
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.db.ExecContext(ctx, `
-		INSERT INTO doubao_schedules (title, note, start_date, interval_days)
+	result, err := s.db.ExecContext(ctx, fmt.Sprintf(`
+		INSERT INTO %s (title, note, start_date, interval_days)
 		VALUES (?, ?, ?, ?)
-	`, normalized.Title, normalized.Note, normalized.StartDate, normalized.IntervalDays)
+	`, s.scheduleTable), normalized.Title, normalized.Note, normalized.StartDate, normalized.IntervalDays)
 	if err != nil {
-		return nil, fmt.Errorf("create doubao schedule: %w", err)
+		return nil, fmt.Errorf("create %s: %w", s.resourceName, err)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return nil, fmt.Errorf("read created doubao schedule id: %w", err)
+		return nil, fmt.Errorf("read created %s id: %w", s.resourceName, err)
 	}
 	return s.Get(ctx, id)
 }
 
 func (s *Service) Update(ctx context.Context, id int64, input ScheduleInput) (*Schedule, error) {
-	normalized, err := normalizeInput(input)
+	normalized, err := normalizeInput(input, s.resourceName)
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.db.ExecContext(ctx, `
-		UPDATE doubao_schedules
+	result, err := s.db.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE %s
 		SET title = ?, note = ?, start_date = ?, interval_days = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, normalized.Title, normalized.Note, normalized.StartDate, normalized.IntervalDays, id)
+	`, s.scheduleTable), normalized.Title, normalized.Note, normalized.StartDate, normalized.IntervalDays, id)
 	if err != nil {
-		return nil, fmt.Errorf("update doubao schedule: %w", err)
+		return nil, fmt.Errorf("update %s: %w", s.resourceName, err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return nil, fmt.Errorf("read updated doubao schedule count: %w", err)
+		return nil, fmt.Errorf("read updated %s count: %w", s.resourceName, err)
 	}
 	if rows == 0 {
 		return nil, ErrNotFound
@@ -181,62 +199,62 @@ func (s *Service) Update(ctx context.Context, id int64, input ScheduleInput) (*S
 func (s *Service) Complete(ctx context.Context, id int64) (*Schedule, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("begin complete doubao schedule: %w", err)
+		return nil, fmt.Errorf("begin complete %s: %w", s.resourceName, err)
 	}
 	defer tx.Rollback()
 
-	record, err := getRecordFromRow(tx.QueryRowContext(ctx, `
+	record, err := getRecordFromRow(tx.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT id, title, note, start_date, interval_days, last_completed_on, created_at, updated_at
-		FROM doubao_schedules
+		FROM %s
 		WHERE id = ?
-	`, id))
+	`, s.scheduleTable), id))
 	if err != nil {
 		return nil, err
 	}
 
 	today := localDate(time.Now())
 	if record.LastCompletedOn != nil && *record.LastCompletedOn == today.Format(dateLayout) {
-		return nil, &ConflictError{Message: "这个日程今天已经完成过了"}
+		return nil, &ConflictError{Message: fmt.Sprintf("这个%s今天已经完成过了", s.resourceName)}
 	}
 	nextDue, err := nextDueDate(record)
 	if err != nil {
 		return nil, err
 	}
 	if today.Before(nextDue) {
-		return nil, &ConflictError{Message: "这个日程还没到提醒日期，暂时不能提前完成"}
+		return nil, &ConflictError{Message: fmt.Sprintf("这个%s还没到提醒日期，暂时不能提前完成", s.resourceName)}
 	}
 
 	todayValue := today.Format(dateLayout)
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO doubao_schedule_completions (schedule_id, completed_on)
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`
+		INSERT INTO %s (%s, completed_on)
 		VALUES (?, ?)
-	`, id, todayValue); err != nil {
+	`, s.completionTable, s.completionKey), id, todayValue); err != nil {
 		if isConstraintError(err) {
-			return nil, &ConflictError{Message: "这个日程今天已经完成过了"}
+			return nil, &ConflictError{Message: fmt.Sprintf("这个%s今天已经完成过了", s.resourceName)}
 		}
-		return nil, fmt.Errorf("record doubao schedule completion: %w", err)
+		return nil, fmt.Errorf("record %s completion: %w", s.resourceName, err)
 	}
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE doubao_schedules
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE %s
 		SET last_completed_on = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
-	`, todayValue, id); err != nil {
-		return nil, fmt.Errorf("update completed doubao schedule: %w", err)
+	`, s.scheduleTable), todayValue, id); err != nil {
+		return nil, fmt.Errorf("update completed %s: %w", s.resourceName, err)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit doubao schedule completion: %w", err)
+		return nil, fmt.Errorf("commit %s completion: %w", s.resourceName, err)
 	}
 	return s.Get(ctx, id)
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM doubao_schedules WHERE id = ?`, id)
+	result, err := s.db.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE id = ?`, s.scheduleTable), id)
 	if err != nil {
-		return fmt.Errorf("delete doubao schedule: %w", err)
+		return fmt.Errorf("delete %s: %w", s.resourceName, err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("read deleted doubao schedule count: %w", err)
+		return fmt.Errorf("read deleted %s count: %w", s.resourceName, err)
 	}
 	if rows == 0 {
 		return ErrNotFound
@@ -245,13 +263,13 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *Service) listRecords(ctx context.Context) ([]scheduleRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT id, title, note, start_date, interval_days, last_completed_on, created_at, updated_at
-		FROM doubao_schedules
+		FROM %s
 		ORDER BY id ASC
-	`)
+	`, s.scheduleTable))
 	if err != nil {
-		return nil, fmt.Errorf("list doubao schedules: %w", err)
+		return nil, fmt.Errorf("list %s: %w", s.resourceName, err)
 	}
 	defer rows.Close()
 
@@ -259,27 +277,27 @@ func (s *Service) listRecords(ctx context.Context) ([]scheduleRecord, error) {
 	for rows.Next() {
 		record, err := getRecordFromRow(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan doubao schedule: %w", err)
+			return nil, fmt.Errorf("scan %s: %w", s.resourceName, err)
 		}
 		records = append(records, record)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read doubao schedules: %w", err)
+		return nil, fmt.Errorf("read %s: %w", s.resourceName, err)
 	}
 	return records, nil
 }
 
 func (s *Service) getRecord(ctx context.Context, id int64) (scheduleRecord, error) {
-	record, err := getRecordFromRow(s.db.QueryRowContext(ctx, `
+	record, err := getRecordFromRow(s.db.QueryRowContext(ctx, fmt.Sprintf(`
 		SELECT id, title, note, start_date, interval_days, last_completed_on, created_at, updated_at
-		FROM doubao_schedules
+		FROM %s
 		WHERE id = ?
-	`, id))
+	`, s.scheduleTable), id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return scheduleRecord{}, ErrNotFound
 	}
 	if err != nil {
-		return scheduleRecord{}, fmt.Errorf("get doubao schedule: %w", err)
+		return scheduleRecord{}, fmt.Errorf("get %s: %w", s.resourceName, err)
 	}
 	return record, nil
 }
@@ -311,15 +329,15 @@ func getRecordFromRow(row rowScanner) (scheduleRecord, error) {
 	return record, nil
 }
 
-func normalizeInput(input ScheduleInput) (ScheduleInput, error) {
+func normalizeInput(input ScheduleInput, resourceName string) (ScheduleInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Note = strings.TrimSpace(input.Note)
 	input.StartDate = strings.TrimSpace(input.StartDate)
 	if input.Title == "" {
-		return ScheduleInput{}, &ValidationError{Message: "请输入日程名称"}
+		return ScheduleInput{}, &ValidationError{Message: fmt.Sprintf("请输入%s名称", resourceName)}
 	}
 	if utf8.RuneCountInString(input.Title) > 100 {
-		return ScheduleInput{}, &ValidationError{Message: "日程名称不能超过 100 个字"}
+		return ScheduleInput{}, &ValidationError{Message: fmt.Sprintf("%s名称不能超过 100 个字", resourceName)}
 	}
 	if utf8.RuneCountInString(input.Note) > 300 {
 		return ScheduleInput{}, &ValidationError{Message: "备注不能超过 300 个字"}
