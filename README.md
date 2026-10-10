@@ -61,6 +61,13 @@ make dev-frontend
 - `POST /api/recipes/foods`：新增食物并设置每周日期
 - `PUT/DELETE /api/recipes/foods/:id`：编辑或删除食物及其周安排
 
+豆包日程支持按间隔天数循环提醒，主要接口包括：
+
+- `GET /api/schedules`：读取今天提醒、逾期状态和下一次提醒日期
+- `POST /api/schedules`：设置日程名称、开始日期和间隔天数
+- `GET/PUT/DELETE /api/schedules/:id`：查看、编辑或删除周期日程
+- `POST /api/schedules/:id/complete`：完成日程，并从完成当天重新计算下一次提醒
+
 ## 构建
 
 构建前端并生成当前平台二进制：

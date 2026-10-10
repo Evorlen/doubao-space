@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Icingworld/doubao-space/internal/recipes"
+	"github.com/Icingworld/doubao-space/internal/schedules"
 	"github.com/Icingworld/doubao-space/internal/tasks"
 	"github.com/Icingworld/doubao-space/web"
 	"github.com/gin-gonic/gin"
@@ -54,6 +55,8 @@ func NewRouterWithDataDir(db *sql.DB, version string, dev bool, dataDir string) 
 	taskHandler.Register(router.Group("/api"))
 	recipeHandler := recipes.NewHandler(recipes.NewService(db))
 	recipeHandler.Register(router.Group("/api"))
+	scheduleHandler := schedules.NewHandler(schedules.NewService(db))
+	scheduleHandler.Register(router.Group("/api"))
 
 	staticServer := http.FileServer(http.FS(web.DistFS))
 	router.NoRoute(func(c *gin.Context) {

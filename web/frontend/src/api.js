@@ -125,3 +125,35 @@ export function updateRecipeFood(id, food) {
 export function deleteRecipeFood(id) {
   return request(`/api/recipes/foods/${id}`, { method: 'DELETE' })
 }
+
+export function getSchedules() {
+  return request('/api/schedules')
+}
+
+export function getSchedule(id) {
+  return request(`/api/schedules/${id}`)
+}
+
+export function createSchedule(schedule) {
+  return request('/api/schedules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(schedule),
+  })
+}
+
+export function updateSchedule(id, schedule) {
+  return request(`/api/schedules/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(schedule),
+  })
+}
+
+export function completeSchedule(id) {
+  return request(`/api/schedules/${id}/complete`, { method: 'POST' })
+}
+
+export function deleteSchedule(id) {
+  return request(`/api/schedules/${id}`, { method: 'DELETE' })
+}

@@ -137,3 +137,66 @@ func TestRecipeRoutes(t *testing.T) {
 		t.Fatalf("delete recipe food status = %d, body = %s", remove.Code, remove.Body.String())
 	}
 }
+
+func TestScheduleRoutes(t *testing.T) {
+	db, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer db.Close()
+
+	router := NewRouter(db, "test", true)
+	create := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/schedules", bytes.NewBufferString(`{"title":"剪指甲","note":"每月一次","start_date":"2020-01-01","interval_days":30}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(create, request)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create schedule status = %d, body = %s", create.Code, create.Body.String())
+	}
+	var created struct {
+		ID    int64 `json:"id"`
+		IsDue bool  `json:"is_due"`
+	}
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created schedule: %v", err)
+	}
+	if created.ID == 0 || !created.IsDue {
+		t.Fatalf("created schedule = %#v, want due schedule", created)
+	}
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/schedules", nil))
+	if list.Code != http.StatusOK {
+		t.Fatalf("list schedules status = %d, body = %s", list.Code, list.Body.String())
+	}
+	var plan struct {
+		DueCount int `json:"due_count"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &plan); err != nil {
+		t.Fatalf("decode schedule plan: %v", err)
+	}
+	if plan.DueCount != 1 {
+		t.Fatalf("schedule plan = %#v, want due_count 1", plan)
+	}
+
+	complete := httptest.NewRecorder()
+	router.ServeHTTP(complete, httptest.NewRequest(http.MethodPost, "/api/schedules/"+strconv.FormatInt(created.ID, 10)+"/complete", nil))
+	if complete.Code != http.StatusOK {
+		t.Fatalf("complete schedule status = %d, body = %s", complete.Code, complete.Body.String())
+	}
+	var completed struct {
+		IsDue bool `json:"is_due"`
+	}
+	if err := json.Unmarshal(complete.Body.Bytes(), &completed); err != nil {
+		t.Fatalf("decode completed schedule: %v", err)
+	}
+	if completed.IsDue {
+		t.Fatalf("completed schedule = %#v, want upcoming", completed)
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(http.MethodDelete, "/api/schedules/"+strconv.FormatInt(created.ID, 10), nil))
+	if remove.Code != http.StatusNoContent {
+		t.Fatalf("delete schedule status = %d, body = %s", remove.Code, remove.Body.String())
+	}
+}

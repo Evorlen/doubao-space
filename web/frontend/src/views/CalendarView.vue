@@ -17,6 +17,7 @@ import {
   getRecipe,
   updateRecipeFood,
 } from '../api'
+import SchedulePanel from '../components/calendar/SchedulePanel.vue'
 
 const categoryOptions = ['主食', '营养补充', '零食', '护理', '其他']
 const weekdayLabels = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日']
@@ -248,8 +249,8 @@ onMounted(loadPlan)
       </div>
       <div class="recipe-welcome-copy">
         <div class="recipe-welcome-kicker">DOUBAO'S WEEKLY RHYTHM</div>
-        <h2>今天给豆包准备什么？</h2>
-        <p>食谱会按周循环。把食物放进表格，再按天勾选，今天的安排会自动被标记出来。</p>
+        <h2>把豆包的日常照顾，安排得刚刚好。</h2>
+        <p>食谱和周期日程放在同一个日历里，今天该吃什么、该做什么一眼就能看到。</p>
       </div>
       <div class="today-summary-box">
         <span>今天</span>
@@ -263,6 +264,8 @@ onMounted(loadPlan)
       <span>食谱暂时无法读取：{{ loadError }}</span>
       <el-button text type="primary" @click="loadPlan">重新加载</el-button>
     </div>
+
+    <SchedulePanel />
 
     <section class="recipe-overview-grid">
       <div class="surface-card today-card">
