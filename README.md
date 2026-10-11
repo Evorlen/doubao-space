@@ -17,7 +17,7 @@ internal/config/        配置和数据目录解析
 internal/database/      SQLite 初始化和迁移
 internal/httpapi/       HTTP 路由和 API
 web/frontend/           Vue 前端源码
-web/dist/               前端构建产物（发布时嵌入二进制）
+web/dist/               前端构建产物（已纳入版本控制，编译时嵌入二进制）
 ```
 
 ## 开发
@@ -93,6 +93,8 @@ make dev-frontend
 make build
 ```
 
+`web/dist/` 中的 HTML、JavaScript 和 CSS 会通过 `go:embed` 编译进程序，因此完整构建产物需要保留在源码中。`make build` 会先重新构建前端；`go test ./...` 还会检查入口 HTML 引用的资源是否都存在。
+
 从 Ubuntu 构建 Apple Silicon 版本：
 
 ```bash
@@ -117,3 +119,7 @@ data/
 ├── backups/        数据库备份
 └── uploads/        用户上传文件
 ```
+
+启动时如果检测到待执行的数据库迁移，程序会先用 SQLite 一致性快照创建 `backups/doubao-migration-*.db`，再逐个以事务执行迁移。迁移成功后会在 `schema_migrations` 中记录文件名和 SHA-256；已执行的迁移如果文件名或内容发生变化，程序会拒绝启动，避免把已发布的迁移直接改写成不可预测的状态。
+
+迁移失败时当前迁移事务会回滚，启动也会停止；修复新版本代码后重新启动即可重试。备份文件是迁移前的数据库副本，恢复前应先停止程序，并将需要恢复的备份复制为 `doubao.db`（同时清理同目录下旧的 `doubao.db-wal` 和 `doubao.db-shm` 文件）。

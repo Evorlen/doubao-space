@@ -12,10 +12,9 @@
 .tools/
 /web/frontend/node_modules/
 
-# Vite output. Keep the bootstrap file so the Go package can compile
-# before the first frontend build.
-/web/dist/*
-!/web/dist/index.html
+# The Go application embeds web/dist at compile time. Keep the complete
+# production output in the repository so a clean checkout can be built and
+# served without relying on a prior local frontend build.
 
 # Test binary, built with `go test -c`
 *.test
