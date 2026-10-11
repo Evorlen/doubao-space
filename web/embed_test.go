@@ -2,6 +2,7 @@ package web
 
 import (
 	"io/fs"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -23,6 +24,23 @@ func TestEmbeddedIndexReferencesExistingAssets(t *testing.T) {
 		assetPath := strings.TrimPrefix(match[1], "/")
 		if _, err := fs.Stat(DistFS, assetPath); err != nil {
 			t.Errorf("embedded index references missing asset %q: %v", assetPath, err)
+		}
+	}
+}
+
+func TestEmbeddedAssetsIncludePrefixedFiles(t *testing.T) {
+	entries, err := os.ReadDir("dist/assets")
+	if err != nil {
+		t.Fatalf("read generated assets: %v", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || (!strings.HasPrefix(entry.Name(), "_") && !strings.HasPrefix(entry.Name(), ".")) {
+			continue
+		}
+		assetPath := "assets/" + entry.Name()
+		if _, err := fs.Stat(DistFS, assetPath); err != nil {
+			t.Errorf("embedded filesystem omitted prefixed asset %q: %v", assetPath, err)
 		}
 	}
 }
