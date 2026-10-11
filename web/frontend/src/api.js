@@ -136,6 +136,32 @@ export function deleteRecipeFood(id) {
   return request(`/api/recipes/foods/${id}`, { method: 'DELETE' })
 }
 
+export function getDoubaoAlbum() {
+  return request('/api/doubao/album')
+}
+
+export function uploadDoubaoAlbum(file, note = '') {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (note.trim()) formData.append('note', note.trim())
+  return request('/api/doubao/album', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function updateDoubaoAlbumItem(id, note) {
+  return request(`/api/doubao/album/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  })
+}
+
+export function deleteDoubaoAlbumItem(id) {
+  return request(`/api/doubao/album/${id}`, { method: 'DELETE' })
+}
+
 export function getSchedules() {
   return request('/api/schedules')
 }

@@ -72,6 +72,13 @@ make dev-frontend
 - `GET/PUT/DELETE /api/schedules/:id`：查看、编辑或删除周期日程
 - `POST /api/schedules/:id/complete`：完成日程，并从完成当天重新计算下一次提醒
 
+豆包相册用于保存豆包的照片和视频，媒体文件存放在本地数据目录，主要接口包括：
+
+- `GET /api/doubao/album`：读取相册记录和照片、视频统计
+- `POST /api/doubao/album`：上传照片或视频，单个文件最大 100 MB，可同时提交备注
+- `GET /api/doubao/album/:id/media`：读取相册媒体内容
+- `GET/PUT/DELETE /api/doubao/album/:id`：查看、编辑备注或删除相册记录
+
 个人计划支持管理需要周期打卡的事情，主要接口包括：
 
 - `GET /api/plans`：读取今天提醒、逾期状态和下一次计划日期
@@ -125,7 +132,7 @@ make build-darwin-arm64
 data/
 ├── doubao.db       SQLite 数据库
 ├── backups/        数据库备份
-└── uploads/        用户上传文件
+└── uploads/        用户上传文件（含任务附件和豆包相册）
 ```
 
 启动时如果检测到待执行的数据库迁移，程序会先用 SQLite 一致性快照创建 `backups/doubao-migration-*.db`，再逐个以事务执行迁移。迁移成功后会在 `schema_migrations` 中记录文件名和 SHA-256；已执行的迁移如果文件名或内容发生变化，程序会拒绝启动，避免把已发布的迁移直接改写成不可预测的状态。

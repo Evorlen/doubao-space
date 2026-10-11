@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Icingworld/doubao-space/internal/album"
 	"github.com/Icingworld/doubao-space/internal/calendar"
 	"github.com/Icingworld/doubao-space/internal/entertainment"
 	"github.com/Icingworld/doubao-space/internal/memos"
@@ -68,6 +69,8 @@ func NewRouterWithDataDir(db *sql.DB, version string, dev bool, dataDir string) 
 	entertainmentHandler.Register(router.Group("/api"))
 	memoHandler := memos.NewHandler(memos.NewService(db))
 	memoHandler.Register(router.Group("/api"))
+	albumHandler := album.NewHandler(album.NewService(db, dataDir))
+	albumHandler.Register(router.Group("/api"))
 
 	staticServer := http.FileServer(http.FS(web.DistFS))
 	router.NoRoute(func(c *gin.Context) {

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -413,5 +414,90 @@ func TestMemoRoutes(t *testing.T) {
 	router.ServeHTTP(remove, httptest.NewRequest(http.MethodDelete, "/api/memos/"+strconv.FormatInt(created.ID, 10), nil))
 	if remove.Code != http.StatusNoContent {
 		t.Fatalf("delete memo status = %d, body = %s", remove.Code, remove.Body.String())
+	}
+}
+
+func TestDoubaoAlbumRoutes(t *testing.T) {
+	dataDir := t.TempDir()
+	db, err := database.Open(dataDir)
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer db.Close()
+
+	router := NewRouterWithDataDir(db, "test", true, dataDir)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "豆包.png")
+	if err != nil {
+		t.Fatalf("create multipart file: %v", err)
+	}
+	if _, err := part.Write([]byte("fake image")); err != nil {
+		t.Fatalf("write multipart file: %v", err)
+	}
+	if err := writer.WriteField("note", "第一次记录"); err != nil {
+		t.Fatalf("write multipart note: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	create := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/doubao/album", body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	router.ServeHTTP(create, request)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create album item status = %d, body = %s", create.Code, create.Body.String())
+	}
+	var created struct {
+		ID        int64  `json:"id"`
+		MediaType string `json:"media_type"`
+		Note      string `json:"note"`
+	}
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created album item: %v", err)
+	}
+	if created.ID == 0 || created.MediaType != "photo" || created.Note != "第一次记录" {
+		t.Fatalf("created album item = %#v", created)
+	}
+
+	media := httptest.NewRecorder()
+	router.ServeHTTP(media, httptest.NewRequest(http.MethodGet, "/api/doubao/album/"+strconv.FormatInt(created.ID, 10)+"/media", nil))
+	if media.Code != http.StatusOK || media.Header().Get("Content-Type") != "image/png" || media.Body.String() != "fake image" {
+		t.Fatalf("media response status = %d, content-type = %q, body = %q", media.Code, media.Header().Get("Content-Type"), media.Body.String())
+	}
+
+	update := httptest.NewRecorder()
+	updateRequest := httptest.NewRequest(http.MethodPut, "/api/doubao/album/"+strconv.FormatInt(created.ID, 10), bytes.NewBufferString(`{"note":"更新备注"}`))
+	updateRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(update, updateRequest)
+	if update.Code != http.StatusOK {
+		t.Fatalf("update album item status = %d, body = %s", update.Code, update.Body.String())
+	}
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/doubao/album", nil))
+	if list.Code != http.StatusOK {
+		t.Fatalf("list album status = %d, body = %s", list.Code, list.Body.String())
+	}
+	var response struct {
+		Items []struct {
+			ID int64 `json:"id"`
+		} `json:"items"`
+		Stats struct {
+			Total int `json:"total"`
+		} `json:"stats"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode album response: %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].ID != created.ID || response.Stats.Total != 1 {
+		t.Fatalf("album response = %#v", response)
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(http.MethodDelete, "/api/doubao/album/"+strconv.FormatInt(created.ID, 10), nil))
+	if remove.Code != http.StatusNoContent {
+		t.Fatalf("delete album item status = %d, body = %s", remove.Code, remove.Body.String())
 	}
 }

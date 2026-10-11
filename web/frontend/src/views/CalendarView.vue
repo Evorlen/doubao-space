@@ -17,6 +17,7 @@ import {
   getRecipe,
   updateRecipeFood,
 } from '../api'
+import DoubaoAlbum from '../components/doubao/DoubaoAlbum.vue'
 import SchedulePanel from '../components/calendar/SchedulePanel.vue'
 
 const categoryOptions = ['主食', '营养补充', '零食', '护理', '其他']
@@ -225,7 +226,7 @@ onMounted(loadPlan)
       <div class="page-heading-copy">
         <p class="eyebrow">DOUBAO SPACE</p>
         <h1>豆包</h1>
-        <p>记录豆包的食谱和周期日程，把每天的照顾安排得轻松一点。</p>
+        <p>记录豆包的食谱、周期日程和每一天值得留下来的照片。</p>
       </div>
       <div class="page-heading-actions">
         <el-button class="soft-button" :loading="loading" @click="loadPlan">
@@ -413,6 +414,8 @@ onMounted(loadPlan)
       </div>
       <span>持续完善中</span>
     </section>
+
+    <DoubaoAlbum />
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="520px" destroy-on-close>
       <div class="recipe-dialog-intro">记录一种食物，再告诉豆包每周哪几天可以吃。</div>
