@@ -71,7 +71,7 @@ const copy = computed(() => {
     itemPlaceholder: '例如：剪指甲、驱虫、清理猫砂盆',
     notePlaceholder: '例如：洗完澡后剪，或记得准备零食安抚豆包',
     example: '例如从今天开始、每 30 天剪一次指甲，完成后再从完成日重新计算。',
-    addedSuccess: '日程已加入豆包日历。',
+    addedSuccess: '日程已加入豆包。',
     dueNote: '今天完成这件事，豆包会更舒服。',
     emptyDueTitle: '今天没有需要处理的日程',
     emptyDueDescription: '可以放心做自己的事，下一次提醒会按计划出现。',

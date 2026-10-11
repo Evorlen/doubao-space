@@ -264,6 +264,33 @@ func TestPersonalPlanRoutes(t *testing.T) {
 	}
 }
 
+func TestCalendarRoutes(t *testing.T) {
+	db, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer db.Close()
+
+	router := NewRouter(db, "test", true)
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/calendar?start=2026-10-01&end=2026-10-31", nil))
+	if list.Code != http.StatusOK {
+		t.Fatalf("list calendar status = %d, body = %s", list.Code, list.Body.String())
+	}
+	var response struct {
+		Today  string `json:"today"`
+		Events []struct {
+			ID string `json:"id"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode calendar response: %v", err)
+	}
+	if response.Today == "" || response.Events == nil {
+		t.Fatalf("calendar response = %#v, want today and events", response)
+	}
+}
+
 func TestEntertainmentRoutes(t *testing.T) {
 	db, err := database.Open(t.TempDir())
 	if err != nil {

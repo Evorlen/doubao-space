@@ -39,12 +39,21 @@ const router = createRouter({
           },
         },
         {
-          path: 'calendar',
-          name: 'calendar',
+          path: 'doubao',
+          name: 'doubao',
           component: () => import('../views/CalendarView.vue'),
           meta: {
-            title: '豆包日历',
-            description: '照顾豆包的每一天，也把安排变得轻松。',
+            title: '豆包',
+            description: '记录豆包的食谱和周期日程。',
+          },
+        },
+        {
+          path: 'calendar',
+          name: 'calendar',
+          component: () => import('../views/CalendarOverviewView.vue'),
+          meta: {
+            title: '日历',
+            description: '把任务、豆包日程和个人计划放在同一张日历里。',
           },
         },
         {

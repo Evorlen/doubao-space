@@ -430,7 +430,7 @@ onMounted(loadItems)
 
             <div class="entertainment-item-rating">
               <span class="entertainment-stars" :aria-label="ratingLabel(item.rating)">
-                <StarFilled v-for="star in item.rating" :key="`filled-${star}`" />
+                <StarFilled v-for="star in item.rating" :key="`filled-${star}`" class="is-filled" />
                 <Star v-for="star in 5 - item.rating" :key="`empty-${star}`" />
               </span>
               <span>{{ ratingLabel(item.rating) }}</span>
@@ -945,7 +945,7 @@ onMounted(loadItems)
   width: 13px;
 }
 
-.entertainment-stars svg:first-child {
+.entertainment-stars svg.is-filled {
   color: #d29c42;
 }
 

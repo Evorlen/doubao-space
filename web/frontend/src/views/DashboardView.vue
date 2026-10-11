@@ -211,7 +211,7 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <RouterLink to="/dashboard/calendar" class="calendar-link">打开豆包日历 <ArrowRight /></RouterLink>
+        <RouterLink to="/dashboard/calendar" class="calendar-link">打开日历 <ArrowRight /></RouterLink>
       </div>
     </section>
 

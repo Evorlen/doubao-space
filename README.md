@@ -55,7 +55,11 @@ make dev-frontend
 - `POST/GET/DELETE /api/tasks/:id/attachments`：上传、下载和删除本地附件（单个文件最大 25 MB）
 - `GET/POST /api/tags`：读取和创建标签
 
-豆包日历的食谱功能已接入本地 SQLite，主要接口包括：
+日历总览会实时聚合任务、豆包日程和个人计划，主要接口包括：
+
+- `GET /api/calendar`：按 `start`、`end`、`sources` 和 `include_completed` 查询日历事件与范围汇总
+
+豆包的食谱功能已接入本地 SQLite，主要接口包括：
 
 - `GET /api/recipes`：读取当前周、今天和全部食物安排
 - `POST /api/recipes/foods`：新增食物并设置每周日期

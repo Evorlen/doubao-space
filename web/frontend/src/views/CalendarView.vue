@@ -223,9 +223,9 @@ onMounted(loadPlan)
   <div class="page-view page-view-wide recipe-page">
     <section class="page-heading recipe-heading">
       <div class="page-heading-copy">
-        <p class="eyebrow">DOUBAO CALENDAR</p>
-        <h1>豆包日历</h1>
-        <p>照顾豆包的每一天，也把日常安排得轻松一点。</p>
+        <p class="eyebrow">DOUBAO SPACE</p>
+        <h1>豆包</h1>
+        <p>记录豆包的食谱和周期日程，把每天的照顾安排得轻松一点。</p>
       </div>
       <div class="page-heading-actions">
         <el-button class="soft-button" :loading="loading" @click="loadPlan">
@@ -250,7 +250,7 @@ onMounted(loadPlan)
       <div class="recipe-welcome-copy">
         <div class="recipe-welcome-kicker">DOUBAO'S WEEKLY RHYTHM</div>
         <h2>把豆包的日常照顾，安排得刚刚好。</h2>
-        <p>食谱和周期日程放在同一个日历里，今天该吃什么、该做什么一眼就能看到。</p>
+        <p>食谱和周期日程放在一起，今天该吃什么、该做什么一眼就能看到。</p>
       </div>
       <div class="today-summary-box">
         <span>今天</span>
@@ -315,7 +315,7 @@ onMounted(loadPlan)
       </div>
     </section>
 
-    <section class="surface-card recipe-table-card">
+    <section id="doubao-recipe" class="surface-card recipe-table-card">
       <div class="card-heading recipe-table-heading">
         <div>
           <p class="card-overline">WEEKLY RECIPE</p>
@@ -408,7 +408,7 @@ onMounted(loadPlan)
     <section class="recipe-note-strip">
       <div class="recipe-note-icon"><Calendar /></div>
       <div>
-        <strong>食谱会成为豆包日历的第一层</strong>
+        <strong>食谱是豆包日常的第一层</strong>
         <p>后续还可以在这里继续加入喂食提醒、驱虫和护理安排。</p>
       </div>
       <span>持续完善中</span>

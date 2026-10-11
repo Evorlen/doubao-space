@@ -41,6 +41,16 @@ export function getTasks(options = {}) {
   return request(`/api/tasks${query ? `?${query}` : ''}`)
 }
 
+export function getCalendarEvents(options = {}) {
+  const params = new URLSearchParams()
+  if (options.start) params.set('start', options.start)
+  if (options.end) params.set('end', options.end)
+  if (options.sources?.length) params.set('sources', options.sources.join(','))
+  if (options.includeCompleted) params.set('include_completed', 'true')
+  const query = params.toString()
+  return request(`/api/calendar${query ? `?${query}` : ''}`)
+}
+
 export function getTask(id) {
   return request(`/api/tasks/${id}`)
 }
