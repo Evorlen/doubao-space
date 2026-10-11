@@ -235,3 +235,43 @@ export function updateEntertainmentItem(id, item) {
 export function deleteEntertainmentItem(id) {
   return request(`/api/entertainment/${id}`, { method: 'DELETE' })
 }
+
+export function getMemos(options = {}) {
+  const params = new URLSearchParams()
+  if (typeof options.archived === 'boolean') params.set('archived', options.archived ? 'true' : 'false')
+  if (options.search) params.set('search', options.search)
+  const query = params.toString()
+  return request(`/api/memos${query ? `?${query}` : ''}`)
+}
+
+export function getMemo(id) {
+  return request(`/api/memos/${id}`)
+}
+
+export function createMemo(memo) {
+  return request('/api/memos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(memo),
+  })
+}
+
+export function updateMemo(id, memo) {
+  return request(`/api/memos/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(memo),
+  })
+}
+
+export function archiveMemo(id) {
+  return request(`/api/memos/${id}/archive`, { method: 'POST' })
+}
+
+export function restoreMemo(id) {
+  return request(`/api/memos/${id}/restore`, { method: 'POST' })
+}
+
+export function deleteMemo(id) {
+  return request(`/api/memos/${id}`, { method: 'DELETE' })
+}

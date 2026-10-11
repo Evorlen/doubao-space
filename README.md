@@ -85,6 +85,14 @@ make dev-frontend
 - `POST /api/entertainment`：新增作品，并记录类型、状态、进度、评分、标签和个人评价
 - `GET/PUT/DELETE /api/entertainment/:id`：查看、编辑或删除作品
 
+备忘录模块用于记录可长期整理的想法，支持富文本、归档和恢复，主要接口包括：
+
+- `GET /api/memos`：读取备忘录列表和统计，支持 `archived`、`search` 筛选
+- `POST /api/memos`：创建备忘录，内容以经过白名单清洗的 HTML 保存
+- `GET/PUT/DELETE /api/memos/:id`：查看、编辑或删除备忘录
+- `POST /api/memos/:id/archive`：归档备忘录
+- `POST /api/memos/:id/restore`：恢复已归档备忘录
+
 ## 构建
 
 构建前端并生成当前平台二进制：

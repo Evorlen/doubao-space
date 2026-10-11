@@ -8,6 +8,7 @@ import {
   Film,
   HomeFilled,
   List,
+  Notebook,
   Search,
   Setting,
   Timer,
@@ -18,6 +19,7 @@ const route = useRoute()
 const navigation = [
   { label: '工作台', to: '/dashboard', icon: HomeFilled },
   { label: '任务', to: '/dashboard/tasks', icon: List },
+  { label: '备忘录', to: '/dashboard/memos', icon: Notebook },
   { label: '豆包', to: '/dashboard/doubao', icon: Bowl },
   { label: '日历', to: '/dashboard/calendar', icon: Calendar },
   { label: '个人计划', to: '/dashboard/plans', icon: CircleCheck },

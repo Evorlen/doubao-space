@@ -352,3 +352,66 @@ func TestEntertainmentRoutes(t *testing.T) {
 		t.Fatalf("delete entertainment item status = %d, body = %s", remove.Code, remove.Body.String())
 	}
 }
+
+func TestMemoRoutes(t *testing.T) {
+	db, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer db.Close()
+
+	router := NewRouter(db, "test", true)
+	create := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/memos", bytes.NewBufferString(`{"title":"随手记","content_html":"<p><strong>记得买牛奶</strong></p>"}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(create, request)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create memo status = %d, body = %s", create.Code, create.Body.String())
+	}
+	var created struct {
+		ID      int64  `json:"id"`
+		Excerpt string `json:"excerpt"`
+	}
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created memo: %v", err)
+	}
+	if created.ID == 0 || created.Excerpt != "记得买牛奶" {
+		t.Fatalf("created memo = %#v", created)
+	}
+
+	archive := httptest.NewRecorder()
+	router.ServeHTTP(archive, httptest.NewRequest(http.MethodPost, "/api/memos/"+strconv.FormatInt(created.ID, 10)+"/archive", nil))
+	if archive.Code != http.StatusOK {
+		t.Fatalf("archive memo status = %d, body = %s", archive.Code, archive.Body.String())
+	}
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/memos?archived=true", nil))
+	if list.Code != http.StatusOK {
+		t.Fatalf("list archived memos status = %d, body = %s", list.Code, list.Body.String())
+	}
+	var response struct {
+		Items []struct {
+			ID       int64 `json:"id"`
+			Archived bool  `json:"archived"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode memo response: %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].ID != created.ID || !response.Items[0].Archived {
+		t.Fatalf("memo response = %#v", response)
+	}
+
+	restore := httptest.NewRecorder()
+	router.ServeHTTP(restore, httptest.NewRequest(http.MethodPost, "/api/memos/"+strconv.FormatInt(created.ID, 10)+"/restore", nil))
+	if restore.Code != http.StatusOK {
+		t.Fatalf("restore memo status = %d, body = %s", restore.Code, restore.Body.String())
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(http.MethodDelete, "/api/memos/"+strconv.FormatInt(created.ID, 10), nil))
+	if remove.Code != http.StatusNoContent {
+		t.Fatalf("delete memo status = %d, body = %s", remove.Code, remove.Body.String())
+	}
+}

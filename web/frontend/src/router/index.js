@@ -76,7 +76,16 @@ const router = createRouter({
         },
         {
           path: 'notes',
-          redirect: '/dashboard/entertainment',
+          redirect: '/dashboard/memos',
+        },
+        {
+          path: 'memos',
+          name: 'memos',
+          component: () => import('../views/MemosView.vue'),
+          meta: {
+            title: '备忘录',
+            description: '把想法写下来，之后再慢慢整理。',
+          },
         },
         {
           path: 'settings',
