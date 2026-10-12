@@ -105,8 +105,18 @@ function normalizeTask(task) {
     due: dueDate ? formatDue(dueDate) : '无截止时间',
     dueTone,
     effectivePriority: task.effective_priority || task.priority,
-    progress: task.progress?.label || '',
+    progress: normalizeProgress(task.progress),
     children: (task.children || []).map(normalizeTask),
+  }
+}
+
+function normalizeProgress(progress) {
+  const total = Math.max(0, Number(progress?.total) || 0)
+  const completed = Math.min(total, Math.max(0, Number(progress?.completed) || 0))
+  return {
+    completed,
+    total,
+    label: progress?.label || (total ? `${completed} / ${total}` : ''),
   }
 }
 

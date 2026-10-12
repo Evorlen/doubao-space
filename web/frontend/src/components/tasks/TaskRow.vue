@@ -47,6 +47,21 @@ const hasChildren = computed(() => visibleChildren.value.length > 0)
 const isExpanded = computed(() => props.expandedIds.has(props.task.id))
 const priority = computed(() => props.task.effectivePriority || props.task.effective_priority || props.task.priority || 'medium')
 const priorityLabel = computed(() => priorityLabels[priority.value] || '中优先级')
+const progress = computed(() => {
+  const total = Math.max(0, Number(props.task.progress?.total) || 0)
+  if (!total) return null
+
+  const completed = Math.min(total, Math.max(0, Number(props.task.progress?.completed) || 0))
+  return {
+    completed,
+    total,
+    percent: Math.round((completed / total) * 100),
+  }
+})
+const progressAriaLabel = computed(() => {
+  if (!progress.value) return ''
+  return `已完成 ${progress.value.completed} 个，共 ${progress.value.total} 个子任务，完成度 ${progress.value.percent}%`
+})
 
 function toggle() {
   if (hasChildren.value) {
@@ -102,7 +117,13 @@ function handleCommand(command) {
             <Clock />
             {{ task.due || '无截止时间' }}
           </span>
-          <span v-if="task.progress" class="task-progress">{{ task.progress }}</span>
+          <span v-if="progress" class="task-progress" :aria-label="progressAriaLabel" :title="progressAriaLabel">
+            <span class="task-progress-label">完成 {{ progress.completed }}/{{ progress.total }}</span>
+            <span class="task-progress-track" aria-hidden="true">
+              <span :style="{ width: `${progress.percent}%` }"></span>
+            </span>
+            <span class="task-progress-percent">{{ progress.percent }}%</span>
+          </span>
         </div>
       </div>
 
@@ -265,6 +286,7 @@ function handleCommand(command) {
 .task-meta-line {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 13px;
   margin-top: 6px;
   color: var(--ds-color-text-tertiary);
@@ -288,8 +310,41 @@ function handleCommand(command) {
 }
 
 .task-progress {
+  min-width: 0;
   padding-left: 13px;
   border-left: 1px solid var(--ds-color-border);
+}
+
+.task-progress-label,
+.task-progress-percent {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-progress-label {
+  color: var(--ds-color-text-secondary);
+}
+
+.task-progress-track {
+  display: block;
+  width: 48px;
+  height: 4px;
+  overflow: hidden;
+  background: #e7ebf2;
+  border-radius: var(--ds-radius-pill);
+}
+
+.task-progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--ds-color-primary);
+  border-radius: inherit;
+  transition: width 180ms ease;
+}
+
+.task-progress-percent {
+  color: var(--ds-color-primary);
+  font-size: 11px;
 }
 
 .task-priority {

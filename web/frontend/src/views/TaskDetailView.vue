@@ -47,10 +47,27 @@ const isDirty = computed(() => JSON.stringify(form.value) !== initialForm.value)
 const isReadOnly = computed(() => Boolean(task.value?.completed))
 const dueLabel = computed(() => task.value?.due_at ? formatDue(new Date(task.value.due_at)) : '无截止时间')
 const dueTone = computed(() => task.value?.due_at && !task.value.completed && new Date(task.value.due_at).getTime() < Date.now() ? 'is-danger' : '')
-const progressLabel = computed(() => task.value?.progress?.label || '暂无子任务')
-const progressPercent = computed(() => {
-  const total = task.value?.progress?.total || 0
-  return total ? Math.round((task.value.progress.completed / total) * 100) : 0
+const progressStats = computed(() => {
+  const total = Math.max(0, Number(task.value?.progress?.total) || 0)
+  const completed = Math.min(total, Math.max(0, Number(task.value?.progress?.completed) || 0))
+  return {
+    completed,
+    total,
+    remaining: total - completed,
+    percent: total ? Math.round((completed / total) * 100) : 0,
+  }
+})
+const hasSubtaskProgress = computed(() => progressStats.value.total > 0)
+const progressSummary = computed(() => {
+  const { completed, total, remaining } = progressStats.value
+  if (!total) return '暂无子任务'
+  if (!remaining) return `已完成全部 ${total} 个子任务`
+  return `已完成 ${completed} 个，共 ${total} 个子任务 · 剩余 ${remaining} 个`
+})
+const progressPropertyLabel = computed(() => {
+  if (!hasSubtaskProgress.value) return '暂无子任务'
+  const { completed, total, percent } = progressStats.value
+  return `${completed}/${total}（${percent}%）`
 })
 
 function createEmptyForm() {
@@ -376,14 +393,29 @@ onMounted(loadTask)
             <div class="detail-section-heading">
               <div>
                 <h2>子任务</h2>
-                <p>完成 {{ progressLabel }}</p>
+                <p>{{ progressSummary }}</p>
               </div>
               <div class="detail-subtask-actions">
                 <el-button text type="primary" :disabled="isReadOnly || task.depth >= 5" @click="openImportDialog">导入子任务</el-button>
                 <el-button text type="primary" :disabled="isReadOnly || task.depth >= 5" @click="openChildDialog">添加子任务</el-button>
               </div>
             </div>
-            <div class="detail-progress-bar"><span :style="{ width: `${progressPercent}%` }"></span></div>
+            <div v-if="hasSubtaskProgress" class="detail-progress-wrap">
+              <div class="detail-progress-meta">
+                <span>完成度</span>
+                <strong>{{ progressStats.percent }}%</strong>
+              </div>
+              <div
+                class="detail-progress-bar"
+                role="progressbar"
+                :aria-valuenow="progressStats.percent"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-label="progressSummary"
+              >
+                <span :style="{ width: `${progressStats.percent}%` }"></span>
+              </div>
+            </div>
             <div v-if="task.children?.length" class="subtask-list">
               <button
                 v-for="subtask in task.children"
@@ -454,7 +486,7 @@ onMounted(loadTask)
               </div>
               <div class="property-row">
                 <span class="property-label"><CircleCheck />完成进度</span>
-                <strong class="property-value">{{ progressLabel }}</strong>
+                <strong class="property-value">{{ progressPropertyLabel }}</strong>
               </div>
             </div>
           </div>
@@ -695,8 +727,7 @@ onMounted(loadTask)
 }
 
 .detail-progress-bar {
-  height: 6px;
-  margin-top: 20px;
+  height: 8px;
   overflow: hidden;
   background: #eef1f6;
   border-radius: var(--ds-radius-pill);
@@ -707,6 +738,26 @@ onMounted(loadTask)
   height: 100%;
   background: var(--ds-color-primary);
   border-radius: inherit;
+  transition: width 180ms ease;
+}
+
+.detail-progress-wrap {
+  margin-top: 19px;
+}
+
+.detail-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: var(--ds-color-text-tertiary);
+  font-size: 11px;
+}
+
+.detail-progress-meta strong {
+  color: var(--ds-color-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .subtask-list {
