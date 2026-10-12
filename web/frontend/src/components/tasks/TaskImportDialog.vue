@@ -144,7 +144,6 @@ function statusLabel(status) {
           <Upload class="button-icon" />选择 Excel 文件
         </el-button>
         <span v-if="file" class="task-import-file-name">{{ file.name }}</span>
-        <span v-else class="task-import-file-name is-muted">仅支持 .xlsx，单个文件不超过 10 MB</span>
       </div>
 
       <p class="task-import-hint">{{ dueHint }}</p>
@@ -227,19 +226,22 @@ function statusLabel(status) {
 
 .task-import-picker {
   display: flex;
+  min-width: 0;
   gap: 12px;
   align-items: center;
 }
 
+.hidden-file-input {
+  display: none;
+}
+
 .task-import-file-name {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   color: var(--ds-color-text-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.task-import-file-name.is-muted {
-  color: var(--ds-color-text-tertiary);
 }
 
 .task-import-hint {
