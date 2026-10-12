@@ -23,6 +23,7 @@ import {
   uploadAttachment as uploadAttachmentRequest,
   updateTask as updateTaskRequest,
 } from '../api'
+import TaskImportDialog from '../components/tasks/TaskImportDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,6 +37,7 @@ const childTitle = ref('')
 const childDue = ref('')
 const childPriority = ref('medium')
 const childSaving = ref(false)
+const importDialogVisible = ref(false)
 const uploading = ref(false)
 const fileInput = ref(null)
 const form = ref(createEmptyForm())
@@ -259,6 +261,15 @@ function openChildDialog() {
   childDialogVisible.value = true
 }
 
+function openImportDialog() {
+  if (!task.value || isReadOnly.value || task.value.depth >= 5) return
+  importDialogVisible.value = true
+}
+
+async function handleImported() {
+  await loadTask()
+}
+
 async function createChild() {
   if (!task.value || !childTitle.value.trim()) {
     ElMessage.warning('请先填写子任务标题。')
@@ -367,7 +378,10 @@ onMounted(loadTask)
                 <h2>子任务</h2>
                 <p>完成 {{ progressLabel }}</p>
               </div>
-              <el-button text type="primary" :disabled="isReadOnly || task.depth >= 5" @click="openChildDialog">添加子任务</el-button>
+              <div class="detail-subtask-actions">
+                <el-button text type="primary" :disabled="isReadOnly || task.depth >= 5" @click="openImportDialog">导入子任务</el-button>
+                <el-button text type="primary" :disabled="isReadOnly || task.depth >= 5" @click="openChildDialog">添加子任务</el-button>
+              </div>
             </div>
             <div class="detail-progress-bar"><span :style="{ width: `${progressPercent}%` }"></span></div>
             <div v-if="task.children?.length" class="subtask-list">
@@ -491,6 +505,8 @@ onMounted(loadTask)
           <el-button type="primary" :loading="childSaving" @click="createChild">保存子任务</el-button>
         </template>
       </el-dialog>
+
+      <TaskImportDialog v-model="importDialogVisible" :task="task" @imported="handleImported" />
     </template>
   </div>
 </template>
@@ -600,6 +616,12 @@ onMounted(loadTask)
 }
 
 .detail-asset-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detail-subtask-actions {
   display: flex;
   align-items: center;
   gap: 4px;

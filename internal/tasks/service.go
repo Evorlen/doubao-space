@@ -109,6 +109,7 @@ type Task struct {
 	Completed         bool         `json:"completed"`
 	CreatedAt         string       `json:"created_at"`
 	UpdatedAt         string       `json:"updated_at"`
+	ImportKey         string       `json:"-"`
 	Path              []string     `json:"path"`
 	Tags              []string     `json:"tags"`
 	Links             []Link       `json:"links"`
@@ -618,7 +619,7 @@ func (s *Service) CreateTag(ctx context.Context, name string) (Tag, error) {
 
 func (s *Service) loadForest(ctx context.Context) ([]*Task, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, parent_id, title, description, due_at, priority, completed, created_at, updated_at
+		SELECT id, parent_id, title, description, due_at, priority, completed, created_at, updated_at, import_key
 		FROM tasks
 		ORDER BY created_at ASC, id ASC
 	`)
@@ -749,12 +750,12 @@ type scanner interface {
 
 func scanTask(row scanner) (*Task, error) {
 	var (
-		task                        Task
-		parentID                    sql.NullInt64
-		dueAt, createdAt, updatedAt sql.NullString
-		completed                   int
+		task                                   Task
+		parentID                               sql.NullInt64
+		dueAt, createdAt, updatedAt, importKey sql.NullString
+		completed                              int
 	)
-	if err := row.Scan(&task.ID, &parentID, &task.Title, &task.Description, &dueAt, &task.Priority, &completed, &createdAt, &updatedAt); err != nil {
+	if err := row.Scan(&task.ID, &parentID, &task.Title, &task.Description, &dueAt, &task.Priority, &completed, &createdAt, &updatedAt, &importKey); err != nil {
 		return nil, fmt.Errorf("scan task: %w", err)
 	}
 	if parentID.Valid {
@@ -771,6 +772,9 @@ func scanTask(row scanner) (*Task, error) {
 	task.Completed = completed != 0
 	task.CreatedAt = createdAt.String
 	task.UpdatedAt = updatedAt.String
+	if importKey.Valid {
+		task.ImportKey = importKey.String
+	}
 	return &task, nil
 }
 

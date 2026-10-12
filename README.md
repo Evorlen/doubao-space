@@ -49,6 +49,9 @@ make dev-frontend
 
 - `GET /api/tasks`：任务树，支持 `include_completed`、`search`、`status`、`priority`、`tag` 和 `sort` 查询参数
 - `POST /api/tasks`：创建顶层任务或子任务
+- `GET /api/tasks/import/template`：下载只含字段名的空白任务导入模板
+- `POST /api/tasks/:id/import/preview`：上传 `.xlsx` 任务表并预览逐行校验与查重结果
+- `POST /api/tasks/:id/import`：将预览通过的 Excel 行批量创建为当前任务的子任务
 - `GET/PUT/DELETE /api/tasks/:id`：查看、编辑和永久删除任务子树
 - `POST /api/tasks/:id/complete`：完成任务
 - `POST /api/tasks/:id/move`：移动任务并重新校验层级和期限规则

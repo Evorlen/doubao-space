@@ -116,6 +116,7 @@ function handleCommand(command) {
           <el-dropdown-menu>
             <el-dropdown-item command="open">打开详情</el-dropdown-item>
             <el-dropdown-item command="add-child" :disabled="task.completed || task.depth >= 5">添加子任务</el-dropdown-item>
+            <el-dropdown-item command="import-child" :disabled="task.completed || task.depth >= 5">导入子任务</el-dropdown-item>
             <el-dropdown-item command="move" :disabled="task.completed">移动任务</el-dropdown-item>
             <el-dropdown-item command="delete" divided>删除任务</el-dropdown-item>
           </el-dropdown-menu>

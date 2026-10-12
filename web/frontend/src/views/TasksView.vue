@@ -12,6 +12,7 @@ import {
   Sort,
 } from '@element-plus/icons-vue'
 import TaskRow from '../components/tasks/TaskRow.vue'
+import TaskImportDialog from '../components/tasks/TaskImportDialog.vue'
 import {
   completeTask as completeTaskRequest,
   createTask as createTaskRequest,
@@ -54,6 +55,8 @@ const moveDialogVisible = ref(false)
 const moveTaskTarget = ref(null)
 const moveParentId = ref(null)
 const moving = ref(false)
+const importDialogVisible = ref(false)
+const importTaskTarget = ref(null)
 
 const summary = computed(() => {
   const allTasks = flattenTasks(taskTree.value)
@@ -250,6 +253,23 @@ function openCreateDialog(parent = null) {
   dialogVisible.value = true
 }
 
+function openImportDialog(task) {
+  if (!task || task.completed) {
+    ElMessage.info('已完成任务不能导入子任务。')
+    return
+  }
+  if (task.depth >= 5) {
+    ElMessage.info('第 5 层任务不能继续添加子任务。')
+    return
+  }
+  importTaskTarget.value = task
+  importDialogVisible.value = true
+}
+
+async function handleImported() {
+  await loadTasks()
+}
+
 function formatPickerDate(value) {
   const pad = (number) => String(number).padStart(2, '0')
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:00`
@@ -292,6 +312,10 @@ async function handleCommand({ command, task }) {
   }
   if (command === 'add-child') {
     openCreateDialog(task)
+    return
+  }
+  if (command === 'import-child') {
+    openImportDialog(task)
     return
   }
   if (command === 'move') {
@@ -567,6 +591,8 @@ onMounted(loadTasks)
         <el-button type="primary" :loading="moving" @click="saveMove">保存移动</el-button>
       </template>
     </el-dialog>
+
+    <TaskImportDialog v-model="importDialogVisible" :task="importTaskTarget" @imported="handleImported" />
   </div>
 </template>
 

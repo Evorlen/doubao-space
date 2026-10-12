@@ -63,6 +63,24 @@ export function createTask(task) {
   })
 }
 
+export function previewTaskImport(taskId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request(`/api/tasks/${taskId}/import/preview`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function importTasks(taskId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request(`/api/tasks/${taskId}/import`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
 export function updateTask(id, task) {
   return request(`/api/tasks/${id}`, {
     method: 'PUT',

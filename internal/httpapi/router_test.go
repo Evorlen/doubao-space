@@ -74,6 +74,18 @@ func TestTaskRoutes(t *testing.T) {
 		t.Fatalf("task list = %#v, want one created task", tasks)
 	}
 
+	template := httptest.NewRecorder()
+	router.ServeHTTP(template, httptest.NewRequest(http.MethodGet, "/api/tasks/import/template", nil))
+	if template.Code != http.StatusOK {
+		t.Fatalf("task import template status = %d, body = %s", template.Code, template.Body.String())
+	}
+	if got := template.Header().Get("Content-Type"); got != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+		t.Fatalf("task import template content type = %q", got)
+	}
+	if body := template.Body.Bytes(); len(body) < 2 || body[0] != 'P' || body[1] != 'K' {
+		t.Fatalf("task import template is not an xlsx archive")
+	}
+
 	remove := httptest.NewRecorder()
 	router.ServeHTTP(remove, httptest.NewRequest(http.MethodDelete, "/api/tasks/"+strconv.FormatInt(created.ID, 10), nil))
 	if remove.Code != http.StatusNoContent {
