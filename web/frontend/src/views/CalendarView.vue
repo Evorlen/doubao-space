@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Apple,
@@ -15,6 +15,7 @@ import {
   createRecipeFood,
   deleteRecipeFood,
   getRecipe,
+  reorderRecipe,
   updateRecipeFood,
 } from '../api'
 import DoubaoAlbum from '../components/doubao/DoubaoAlbum.vue'
@@ -31,7 +32,10 @@ const editingId = ref(null)
 const saving = ref(false)
 const savingFoodId = ref(null)
 const deletingFoodId = ref(null)
+const reordering = ref(false)
+const dragState = ref(null)
 const form = ref(createEmptyForm())
+let dragTimer = null
 
 const foods = computed(() => plan.value.foods || [])
 const weekdays = computed(() => {
@@ -48,6 +52,21 @@ const weekRange = computed(() => {
   return `${formatDate(plan.value.week_start)} — ${formatDate(plan.value.week_end)}`
 })
 const dialogTitle = computed(() => (editingId.value ? '编辑食物' : '添加食物'))
+const dragLabel = computed(() => {
+  const state = dragState.value
+  if (!state?.active) return ''
+  if (state.type === 'food') return foods.value.find((food) => food.id === state.id)?.name || '食物'
+  return weekdays.value.find((day) => day.value === state.id)?.label || '星期'
+})
+const dragGhostStyle = computed(() => {
+  const state = dragState.value
+  if (!state?.active) return {}
+  const maxLeft = Math.max(8, window.innerWidth - 190)
+  return {
+    left: `${Math.min(state.pointerX + 14, maxLeft)}px`,
+    top: `${Math.max(8, state.pointerY + 14)}px`,
+  }
+})
 
 function createEmptyForm() {
   return {
@@ -97,6 +116,177 @@ function categoryClass(category) {
     零食: 'is-snack',
     护理: 'is-care',
   }[category] || 'is-other'
+}
+
+function sameOrder(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function beginDrag(type, id, event) {
+  if (reordering.value || loading.value || (event.pointerType === 'mouse' && event.button !== 0)) return
+  cancelDrag()
+
+  dragState.value = {
+    type,
+    id,
+    startX: event.clientX,
+    startY: event.clientY,
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    active: false,
+    overId: id,
+    originalFoodIds: foods.value.map((food) => food.id),
+    originalWeekdayValues: weekdays.value.map((day) => day.value),
+  }
+  window.addEventListener('pointermove', handleDragMove, { passive: false })
+  window.addEventListener('pointerup', finishDrag)
+  window.addEventListener('pointercancel', cancelDrag)
+  dragTimer = window.setTimeout(activateDrag, 450)
+}
+
+function activateDrag() {
+  if (!dragState.value) return
+  dragState.value = { ...dragState.value, active: true }
+  document.body.classList.add('is-reordering-recipe')
+}
+
+function handleDragMove(event) {
+  const state = dragState.value
+  if (!state) return
+
+  if (!state.active) {
+    const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
+    if (distance > 10) cancelDrag()
+    return
+  }
+
+  event.preventDefault()
+  dragState.value = {
+    ...state,
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+  }
+  const activeState = dragState.value
+  const target = document.elementFromPoint(event.clientX, event.clientY)
+  const selector = activeState.type === 'food' ? '[data-recipe-food-id]' : '[data-recipe-weekday-value]'
+  const targetElement = target instanceof Element ? target.closest(selector) : null
+  if (!targetElement) {
+    dragState.value = { ...activeState, overId: activeState.id }
+    return
+  }
+
+  const targetId = Number(activeState.type === 'food'
+    ? targetElement.dataset.recipeFoodId
+    : targetElement.dataset.recipeWeekdayValue)
+  if (!targetId) return
+  moveDraggedTarget(activeState, targetId)
+}
+
+function moveDraggedTarget(state, targetId) {
+  if (targetId === state.id) return
+  dragState.value = { ...dragState.value, overId: targetId }
+}
+
+function finishDrag() {
+  const state = dragState.value
+  if (!state) return
+
+  const wasActive = state.active
+  const order = orderAfterDrop(state)
+  cleanupDrag()
+  if (!wasActive) return
+
+  const original = {
+    food_ids: state.originalFoodIds,
+    weekday_values: state.originalWeekdayValues,
+  }
+  if (sameOrder(order.food_ids, original.food_ids) && sameOrder(order.weekday_values, original.weekday_values)) return
+  void persistRecipeOrder(order, original)
+}
+
+function orderAfterDrop(state) {
+  return {
+    food_ids: state.type === 'food'
+      ? moveValue(state.originalFoodIds, state.id, state.overId)
+      : state.originalFoodIds,
+    weekday_values: state.type === 'weekday'
+      ? moveValue(state.originalWeekdayValues, state.id, state.overId)
+      : state.originalWeekdayValues,
+  }
+}
+
+function moveValue(values, draggedValue, targetValue) {
+  const sourceIndex = values.indexOf(draggedValue)
+  const targetIndex = values.indexOf(targetValue)
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return [...values]
+
+  const remaining = values.filter((value) => value !== draggedValue)
+  let insertIndex = remaining.indexOf(targetValue)
+  if (sourceIndex < targetIndex) insertIndex += 1
+  remaining.splice(insertIndex, 0, draggedValue)
+  return remaining
+}
+
+function cancelDrag() {
+  const state = dragState.value
+  if (state?.active) {
+    restoreRecipeOrder({
+      food_ids: state.originalFoodIds,
+      weekday_values: state.originalWeekdayValues,
+    })
+  }
+  cleanupDrag()
+}
+
+function cleanupDrag() {
+  if (dragTimer !== null) {
+    window.clearTimeout(dragTimer)
+    dragTimer = null
+  }
+  window.removeEventListener('pointermove', handleDragMove)
+  window.removeEventListener('pointerup', finishDrag)
+  window.removeEventListener('pointercancel', cancelDrag)
+  document.body.classList.remove('is-reordering-recipe')
+  dragState.value = null
+}
+
+function restoreRecipeOrder(order) {
+  const foodsByID = new Map(foods.value.map((food) => [food.id, food]))
+  const weekdaysByValue = new Map(weekdays.value.map((day) => [day.value, day]))
+  plan.value = {
+    ...plan.value,
+    foods: order.food_ids.map((id) => foodsByID.get(id)).filter(Boolean),
+    weekdays: order.weekday_values.map((value) => weekdaysByValue.get(value)).filter(Boolean),
+  }
+}
+
+async function persistRecipeOrder(order, original) {
+  reordering.value = true
+  try {
+    plan.value = await reorderRecipe(order)
+    ElMessage.success('食物和星期顺序已保存。')
+  } catch (error) {
+    restoreRecipeOrder(original)
+    ElMessage.error(error.message)
+  } finally {
+    reordering.value = false
+  }
+}
+
+function isFoodDragging(id) {
+  return dragState.value?.active && dragState.value.type === 'food' && dragState.value.id === id
+}
+
+function isFoodDragOver(id) {
+  return dragState.value?.active && dragState.value.type === 'food' && dragState.value.overId === id && dragState.value.id !== id
+}
+
+function isWeekdayDragging(value) {
+  return dragState.value?.active && dragState.value.type === 'weekday' && dragState.value.id === value
+}
+
+function isWeekdayDragOver(value) {
+  return dragState.value?.active && dragState.value.type === 'weekday' && dragState.value.overId === value && dragState.value.id !== value
 }
 
 async function loadPlan() {
@@ -218,6 +408,7 @@ async function removeFood(food) {
 }
 
 onMounted(loadPlan)
+onBeforeUnmount(cancelDrag)
 </script>
 
 <template>
@@ -321,9 +512,9 @@ onMounted(loadPlan)
         <div>
           <p class="card-overline">WEEKLY RECIPE</p>
           <h2>豆包每周食谱</h2>
-          <p>点击单元格即可调整某种食物在哪些天出现。</p>
+          <p>点击单元格调整安排；长按手柄可以拖动食物行和星期列。</p>
         </div>
-        <div class="table-hint"><span></span>今天突出显示</div>
+        <div class="table-hint"><span></span>今天突出显示 · 长按手柄排序</div>
       </div>
 
       <div v-if="loading" class="recipe-table-loading">
@@ -344,16 +535,47 @@ onMounted(loadPlan)
               v-for="day in weekdays"
               :key="day.value"
               class="recipe-day-heading"
-              :class="{ 'is-today': day.value === today }"
+              :class="{
+                'is-today': day.value === today,
+                'is-dragging': isWeekdayDragging(day.value),
+                'is-drag-over': isWeekdayDragOver(day.value),
+              }"
+              :data-recipe-weekday-value="day.value"
             >
+              <button
+                type="button"
+                class="recipe-drag-handle day-drag-handle"
+                title="长按拖动星期顺序"
+                :aria-label="`长按拖动${day.label}顺序`"
+                @pointerdown.stop="beginDrag('weekday', day.value, $event)"
+                @click.prevent.stop
+              >
+                <span aria-hidden="true">⠿</span>
+              </button>
               <strong>{{ day.label }}</strong>
               <small>{{ day.date_label }}</small>
               <em v-if="day.value === today">今天</em>
             </div>
           </div>
 
-          <div v-for="food in foods" :key="food.id" class="recipe-table-row recipe-table-body-row">
+          <div
+            v-for="food in foods"
+            :key="food.id"
+            class="recipe-table-row recipe-table-body-row"
+            :class="{ 'is-dragging': isFoodDragging(food.id), 'is-drag-over': isFoodDragOver(food.id) }"
+            :data-recipe-food-id="food.id"
+          >
             <div class="food-cell">
+              <button
+                type="button"
+                class="recipe-drag-handle food-drag-handle"
+                title="长按拖动食物顺序"
+                :aria-label="`长按拖动${food.name}顺序`"
+                @pointerdown.stop="beginDrag('food', food.id, $event)"
+                @click.prevent.stop
+              >
+                <span aria-hidden="true">⠿</span>
+              </button>
               <span class="food-color-mark" :class="categoryClass(food.category)"></span>
               <div class="food-cell-copy">
                 <div class="food-name-line">
@@ -363,14 +585,14 @@ onMounted(loadPlan)
                 <small>{{ food.note || '还没有备注' }}</small>
               </div>
               <div class="food-actions">
-                <button type="button" title="编辑食物" aria-label="编辑食物" @click="openEdit(food)">
+                <button type="button" title="编辑食物" aria-label="编辑食物" :disabled="reordering" @click="openEdit(food)">
                   <Edit />
                 </button>
                 <button
                   type="button"
                   title="删除食物"
                   aria-label="删除食物"
-                  :disabled="deletingFoodId === food.id"
+                  :disabled="deletingFoodId === food.id || reordering"
                   @click="removeFood(food)"
                 >
                   <Delete />
@@ -389,7 +611,7 @@ onMounted(loadPlan)
               }"
               :aria-label="`${food.name}，${day.label}${isScheduled(food, day) ? '已安排' : '未安排'}`"
               :aria-pressed="isScheduled(food, day)"
-              :disabled="savingFoodId === food.id"
+              :disabled="savingFoodId === food.id || reordering"
               @click="toggleDay(food, day)"
             >
               <span v-if="isScheduled(food, day)" class="scheduled-mark"><Check /></span>
@@ -397,6 +619,11 @@ onMounted(loadPlan)
             </button>
           </div>
         </div>
+      </div>
+
+      <div v-if="dragState?.active" class="recipe-drag-ghost" :style="dragGhostStyle">
+        <span aria-hidden="true">⠿</span>
+        <strong>{{ dragLabel }}</strong>
       </div>
 
       <div class="recipe-table-footer">
@@ -903,14 +1130,99 @@ onMounted(loadPlan)
   color: #8d682b;
 }
 
+.recipe-day-heading.is-dragging {
+  opacity: 0.45;
+}
+
+.recipe-day-heading.is-drag-over {
+  box-shadow: inset 3px 0 0 var(--ds-color-primary), inset -3px 0 0 var(--ds-color-primary);
+}
+
 .recipe-table-body-row {
   min-height: 78px;
   background: #ffffff;
   border-bottom: 1px solid #eef0f5;
+  transition: opacity 160ms ease, box-shadow 160ms ease;
 }
 
 .recipe-table-body-row:last-child {
   border-bottom: 0;
+}
+
+.recipe-table-body-row.is-dragging {
+  opacity: 0.45;
+}
+
+.recipe-table-body-row.is-drag-over {
+  box-shadow: inset 0 3px 0 var(--ds-color-primary), inset 0 -3px 0 var(--ds-color-primary);
+}
+
+.recipe-drag-ghost {
+  position: fixed;
+  z-index: 20;
+  display: inline-flex;
+  max-width: 180px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 12px;
+  color: var(--ds-color-text-primary);
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--ds-color-primary);
+  border-radius: 9px;
+  box-shadow: 0 10px 24px rgba(39, 56, 88, 0.18);
+  transform: translateZ(0);
+}
+
+.recipe-drag-ghost > span {
+  color: var(--ds-color-primary);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.recipe-drag-ghost strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recipe-drag-handle {
+  display: grid;
+  width: 20px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  color: var(--ds-color-text-tertiary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: grab;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  touch-action: none;
+  user-select: none;
+}
+
+.recipe-drag-handle:hover,
+.recipe-drag-handle:focus-visible {
+  color: var(--ds-color-primary);
+  background: var(--ds-color-primary-light);
+  outline: none;
+}
+
+.recipe-drag-handle:active {
+  cursor: grabbing;
+}
+
+.day-drag-handle {
+  position: absolute;
+  bottom: 5px;
+  left: 7px;
+  width: 18px;
+  height: 17px;
+  font-size: 13px;
 }
 
 .food-cell {
@@ -994,6 +1306,11 @@ onMounted(loadPlan)
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.food-drag-handle {
+  margin-left: -5px;
+  font-size: 14px;
 }
 
 .food-actions {

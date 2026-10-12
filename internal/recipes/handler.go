@@ -18,6 +18,7 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) Register(router *gin.RouterGroup) {
 	router.GET("/recipes", h.list)
+	router.PUT("/recipes/order", h.reorder)
 	router.POST("/recipes/foods", h.createFood)
 	router.PUT("/recipes/foods/:id", h.updateFood)
 	router.DELETE("/recipes/foods/:id", h.deleteFood)
@@ -30,8 +31,27 @@ type foodPayload struct {
 	Days     []int  `json:"days"`
 }
 
+type reorderPayload struct {
+	FoodIDs       []int64 `json:"food_ids"`
+	WeekdayValues []int   `json:"weekday_values"`
+}
+
 func (h *Handler) list(c *gin.Context) {
 	plan, err := h.service.GetPlan(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, plan)
+}
+
+func (h *Handler) reorder(c *gin.Context) {
+	var payload reorderPayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式不正确"})
+		return
+	}
+	plan, err := h.service.Reorder(c.Request.Context(), payload.FoodIDs, payload.WeekdayValues)
 	if err != nil {
 		writeError(c, err)
 		return

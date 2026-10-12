@@ -65,6 +65,7 @@ make dev-frontend
 豆包的食谱功能已接入本地 SQLite，主要接口包括：
 
 - `GET /api/recipes`：读取当前周、今天和全部食物安排
+- `PUT /api/recipes/order`：保存食物行和星期列的显示顺序
 - `POST /api/recipes/foods`：新增食物并设置每周日期
 - `PUT/DELETE /api/recipes/foods/:id`：编辑或删除食物及其周安排
 

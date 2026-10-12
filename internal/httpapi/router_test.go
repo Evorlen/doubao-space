@@ -136,6 +136,29 @@ func TestRecipeRoutes(t *testing.T) {
 		t.Fatalf("recipe foods = %#v", plan.Foods)
 	}
 
+	reorder := httptest.NewRecorder()
+	reorderRequest := httptest.NewRequest(
+		http.MethodPut,
+		"/api/recipes/order",
+		bytes.NewBufferString(`{"food_ids":[`+strconv.FormatInt(created.ID, 10)+`],"weekday_values":[3,1,2,4,5,6,7]}`),
+	)
+	reorderRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(reorder, reorderRequest)
+	if reorder.Code != http.StatusOK {
+		t.Fatalf("reorder recipe status = %d, body = %s", reorder.Code, reorder.Body.String())
+	}
+	var reordered struct {
+		Weekdays []struct {
+			Value int `json:"value"`
+		} `json:"weekdays"`
+	}
+	if err := json.Unmarshal(reorder.Body.Bytes(), &reordered); err != nil {
+		t.Fatalf("decode reordered recipe: %v", err)
+	}
+	if len(reordered.Weekdays) != 7 || reordered.Weekdays[0].Value != 3 {
+		t.Fatalf("reordered weekdays = %#v, want Wednesday first", reordered.Weekdays)
+	}
+
 	update := httptest.NewRecorder()
 	updateRequest := httptest.NewRequest(http.MethodPut, "/api/recipes/foods/"+strconv.FormatInt(created.ID, 10), bytes.NewBufferString(`{"name":"罐头","category":"主食","days":[2,7]}`))
 	updateRequest.Header.Set("Content-Type", "application/json")

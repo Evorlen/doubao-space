@@ -25,7 +25,7 @@ func TestOpenAppliesMigrations(t *testing.T) {
 		t.Fatalf("app_name = %q, want %q", appName, "豆包空间")
 	}
 	var migrationCount int
-	if err := db.QueryRow(`SELECT COUNT(1) FROM schema_migrations WHERE version = 10`).Scan(&migrationCount); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(1) FROM schema_migrations WHERE version = 11`).Scan(&migrationCount); err != nil {
 		db.Close()
 		t.Fatalf("read schema migration: %v", err)
 	}
@@ -43,13 +43,13 @@ func TestOpenAppliesMigrations(t *testing.T) {
 		t.Fatalf("task table count = %d, want 4", taskTableCount)
 	}
 	var recipeTableCount int
-	if err := db.QueryRow(`SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name IN ('recipe_foods', 'recipe_food_days')`).Scan(&recipeTableCount); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name IN ('recipe_foods', 'recipe_food_days', 'recipe_weekday_order')`).Scan(&recipeTableCount); err != nil {
 		db.Close()
 		t.Fatalf("read recipe tables: %v", err)
 	}
-	if recipeTableCount != 2 {
+	if recipeTableCount != 3 {
 		db.Close()
-		t.Fatalf("recipe table count = %d, want 2", recipeTableCount)
+		t.Fatalf("recipe table count = %d, want 3", recipeTableCount)
 	}
 	var scheduleTableCount int
 	if err := db.QueryRow(`SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name IN ('doubao_schedules', 'doubao_schedule_completions')`).Scan(&scheduleTableCount); err != nil {

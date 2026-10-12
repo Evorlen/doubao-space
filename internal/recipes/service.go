@@ -76,28 +76,36 @@ func (s *Service) GetPlan(ctx context.Context) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
+	weekdayOrder, err := s.listWeekdayOrder(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	now := time.Now()
 	today := weekdayNumber(now)
 	labels := []string{"", "周一", "周二", "周三", "周四", "周五", "周六", "周日"}
 	monday := now.AddDate(0, 0, -(today - 1))
-	weekdays := make([]Weekday, 0, 7)
+	weekdayByValue := make(map[int]Weekday, len(weekdayOrder))
 	for index := 1; index <= 7; index++ {
 		date := monday.AddDate(0, 0, index-1)
-		weekdays = append(weekdays, Weekday{
+		weekdayByValue[index] = Weekday{
 			Value:     index,
 			Label:     labels[index],
 			Date:      date.Format("2006-01-02"),
 			DateLabel: date.Format("01/02"),
 			IsToday:   index == today,
-		})
+		}
+	}
+	weekdays := make([]Weekday, 0, len(weekdayOrder))
+	for _, value := range weekdayOrder {
+		weekdays = append(weekdays, weekdayByValue[value])
 	}
 
 	return &Plan{
 		Today:      today,
 		TodayLabel: labels[today],
-		WeekStart:  weekdays[0].Date,
-		WeekEnd:    weekdays[len(weekdays)-1].Date,
+		WeekStart:  monday.Format("2006-01-02"),
+		WeekEnd:    monday.AddDate(0, 0, 6).Format("2006-01-02"),
 		Weekdays:   weekdays,
 		Foods:      foods,
 	}, nil
@@ -115,10 +123,14 @@ func (s *Service) CreateFood(ctx context.Context, input FoodInput) (*Food, error
 	}
 	defer tx.Rollback()
 
+	var sortOrder int
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(sort_order), 0) + 1 FROM recipe_foods`).Scan(&sortOrder); err != nil {
+		return nil, fmt.Errorf("read recipe food order: %w", err)
+	}
 	result, err := tx.ExecContext(ctx, `
-		INSERT INTO recipe_foods (name, category, note)
-		VALUES (?, ?, ?)
-	`, normalized.Name, normalized.Category, normalized.Note)
+		INSERT INTO recipe_foods (name, category, note, sort_order)
+		VALUES (?, ?, ?, ?)
+	`, normalized.Name, normalized.Category, normalized.Note, sortOrder)
 	if err != nil {
 		if isConstraintError(err) {
 			return nil, &ConflictError{Message: "已经有同名食物了，请换一个名称"}
@@ -206,6 +218,50 @@ func (s *Service) DeleteFood(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (s *Service) Reorder(ctx context.Context, foodIDs []int64, weekdayValues []int) (*Plan, error) {
+	if err := validateWeekdayOrder(weekdayValues); err != nil {
+		return nil, err
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin reorder recipe: %w", err)
+	}
+	defer tx.Rollback()
+
+	existingFoodIDs, err := listFoodIDs(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateFoodOrder(foodIDs, existingFoodIDs); err != nil {
+		return nil, err
+	}
+
+	for index, foodID := range foodIDs {
+		if _, err := tx.ExecContext(ctx, `UPDATE recipe_foods SET sort_order = ? WHERE id = ?`, index+1, foodID); err != nil {
+			return nil, fmt.Errorf("save recipe food order: %w", err)
+		}
+	}
+	for index, weekday := range weekdayValues {
+		result, err := tx.ExecContext(ctx, `UPDATE recipe_weekday_order SET sort_order = ? WHERE weekday = ?`, index+1, weekday)
+		if err != nil {
+			return nil, fmt.Errorf("save recipe weekday order: %w", err)
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return nil, fmt.Errorf("read recipe weekday order count: %w", err)
+		}
+		if rows != 1 {
+			return nil, &ConflictError{Message: "食谱星期顺序已变化，请刷新后重试"}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit recipe reorder: %w", err)
+	}
+	return s.GetPlan(ctx)
+}
+
 func (s *Service) listFoods(ctx context.Context, ids ...int64) ([]Food, error) {
 	query := `
 		SELECT f.id, f.name, f.category, f.note, f.created_at, f.updated_at, d.weekday
@@ -217,7 +273,7 @@ func (s *Service) listFoods(ctx context.Context, ids ...int64) ([]Food, error) {
 		query += " WHERE f.id = ?"
 		args = append(args, ids[0])
 	}
-	query += " ORDER BY f.id ASC, d.weekday ASC"
+	query += " ORDER BY f.sort_order ASC, f.id ASC, d.weekday ASC"
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -267,6 +323,92 @@ func (s *Service) listFoods(ctx context.Context, ids ...int64) ([]Food, error) {
 		foods = append(foods, *foodByID[id])
 	}
 	return foods, nil
+}
+
+func (s *Service) listWeekdayOrder(ctx context.Context) ([]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT weekday FROM recipe_weekday_order ORDER BY sort_order ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("list recipe weekday order: %w", err)
+	}
+	defer rows.Close()
+
+	order := make([]int, 0, 7)
+	for rows.Next() {
+		var weekday int
+		if err := rows.Scan(&weekday); err != nil {
+			return nil, fmt.Errorf("scan recipe weekday order: %w", err)
+		}
+		order = append(order, weekday)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read recipe weekday order: %w", err)
+	}
+	if err := validateWeekdayOrder(order); err != nil {
+		return nil, fmt.Errorf("invalid recipe weekday order: %w", err)
+	}
+	return order, nil
+}
+
+func listFoodIDs(ctx context.Context, tx *sql.Tx) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM recipe_foods ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("list recipe food ids: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan recipe food id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read recipe food ids: %w", err)
+	}
+	return ids, nil
+}
+
+func validateFoodOrder(order, existing []int64) error {
+	if len(order) != len(existing) {
+		return &ConflictError{Message: "食物列表已变化，请刷新后重试"}
+	}
+	existingSet := make(map[int64]struct{}, len(existing))
+	for _, id := range existing {
+		existingSet[id] = struct{}{}
+	}
+	seen := make(map[int64]struct{}, len(order))
+	for _, id := range order {
+		if id <= 0 {
+			return &ValidationError{Message: "食物顺序中包含无效的食物 ID"}
+		}
+		if _, ok := existingSet[id]; !ok {
+			return &ConflictError{Message: "食物列表已变化，请刷新后重试"}
+		}
+		if _, ok := seen[id]; ok {
+			return &ValidationError{Message: "食物顺序中不能包含重复项"}
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
+}
+
+func validateWeekdayOrder(order []int) error {
+	if len(order) != 7 {
+		return &ValidationError{Message: "星期顺序必须包含周一到周日"}
+	}
+	seen := make(map[int]struct{}, len(order))
+	for _, weekday := range order {
+		if weekday < 1 || weekday > 7 {
+			return &ValidationError{Message: "星期顺序必须在周一到周日之间"}
+		}
+		if _, ok := seen[weekday]; ok {
+			return &ValidationError{Message: "星期顺序中不能包含重复项"}
+		}
+		seen[weekday] = struct{}{}
+	}
+	return nil
 }
 
 func normalizeInput(input FoodInput) (FoodInput, error) {

@@ -134,6 +134,14 @@ export function getRecipe() {
   return request('/api/recipes')
 }
 
+export function reorderRecipe(order) {
+  return request('/api/recipes/order', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(order),
+  })
+}
+
 export function createRecipeFood(food) {
   return request('/api/recipes/foods', {
     method: 'POST',
