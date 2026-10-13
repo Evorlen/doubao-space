@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTaskImportPreviewAndCommit(t *testing.T) {
@@ -113,6 +114,40 @@ func TestTaskImportTemplate(t *testing.T) {
 		if got := rows[0].Cells[index+1]; got != header {
 			t.Errorf("template header %d = %q, want %q", index+1, got, header)
 		}
+	}
+}
+
+func TestXLSXDateSerialPreservesMidnight(t *testing.T) {
+	location, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatalf("LoadLocation(Asia/Shanghai) error = %v", err)
+	}
+	previousLocal := time.Local
+	time.Local = location
+	t.Cleanup(func() { time.Local = previousLocal })
+
+	styles := xlsxStyles{CellXfs: []xlsxCellXf{{}, {NumFmtID: 14}}}
+	got := xlsxCellValue(xlsxCell{Style: 1, Value: "46326"}, nil, styles)
+	if got != "2026-10-31 00:00:00" {
+		t.Fatalf("xlsx date serial = %q, want 2026-10-31 00:00:00", got)
+	}
+
+	parsed, err := parseDue(got)
+	if err != nil {
+		t.Fatalf("parseDue(%q) error = %v", got, err)
+	}
+	if parsed.Format("2006-01-02 15:04:05") != "2026-10-31 00:00:00" {
+		t.Fatalf("parsed xlsx date = %s, want 2026-10-31 00:00:00", parsed.Format("2006-01-02 15:04:05"))
+	}
+}
+
+func TestParseDueAcceptsSlashDate(t *testing.T) {
+	parsed, err := parseDue("2026/10/31 0:00")
+	if err != nil {
+		t.Fatalf("parseDue(slash date) error = %v", err)
+	}
+	if parsed.Format("2006-01-02 15:04") != "2026-10-31 00:00" {
+		t.Fatalf("parsed slash date = %s, want 2026-10-31 00:00", parsed.Format("2006-01-02 15:04"))
 	}
 }
 

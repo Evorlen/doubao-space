@@ -148,6 +148,19 @@ function statusLabel(status) {
 
       <p class="task-import-hint">{{ dueHint }}</p>
 
+      <div class="task-import-fields">
+        <strong>字段填写说明</strong>
+        <div class="task-import-field-grid">
+          <span>任务标题</span><span>必填，每行一个任务。</span>
+          <span>导入编号</span><span>可选；同一父任务下应保持唯一，便于重复导入时查重。</span>
+          <span>任务描述</span><span>可选，填写普通文本。</span>
+          <span>截止时间</span><span>填写 <code>2026-10-31 00:00</code>；也支持 Excel 日期单元格。父任务无期限时留空。</span>
+          <span>优先级</span><span>填写“紧急 / 高 / 中 / 低”，留空默认为“中”。</span>
+          <span>标签</span><span>多个标签用“；”或英文逗号分隔。</span>
+          <span>外部链接</span><span>格式为 <code>名称|https://example.com</code>，多个链接用“；”或换行分隔。</span>
+        </div>
+      </div>
+
       <div v-if="previewing" class="task-import-state">正在解析 Excel 并检查任务规则…</div>
 
       <template v-else-if="preview">
@@ -246,6 +259,36 @@ function statusLabel(status) {
 
 .task-import-hint {
   margin-top: -8px;
+}
+
+.task-import-fields {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  color: var(--ds-color-text-secondary);
+  background: var(--ds-color-surface-muted, #f7f8fa);
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.task-import-field-grid {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 6px 12px;
+  line-height: 1.5;
+}
+
+.task-import-field-grid span:nth-child(odd) {
+  color: var(--ds-color-text-primary);
+  font-weight: 600;
+}
+
+.task-import-fields code {
+  padding: 1px 4px;
+  color: var(--ds-color-primary);
+  background: var(--ds-color-primary-light);
+  border-radius: 4px;
+  font-family: inherit;
 }
 
 .task-import-summary {

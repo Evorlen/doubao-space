@@ -335,8 +335,13 @@ func (styles xlsxStyles) isDateStyle(style int) bool {
 }
 
 func excelSerialDate(serial float64) time.Time {
-	base := time.Date(1899, 12, 30, 0, 0, 0, 0, time.Local)
-	return base.Add(time.Duration(serial * float64(24*time.Hour)))
+	// Excel serial dates are timezone-less wall-clock values. Do the arithmetic
+	// in UTC so that the historical offset of time.Local at the 1899 epoch does
+	// not leak into modern dates (Asia/Shanghai, for example, was +08:05:43 at
+	// that point and would turn midnight into 23:54:17 on the previous day).
+	base := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)
+	nanoseconds := math.Round(serial * float64(24*time.Hour))
+	return base.Add(time.Duration(nanoseconds))
 }
 
 func xlsxColumnIndex(reference string) int {

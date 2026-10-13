@@ -903,6 +903,11 @@ func parseDue(value string) (*time.Time, error) {
 		"2006-01-02 15:04",
 		"2006-01-02T15:04",
 		"2006-01-02",
+		"2006/01/02 15:04:05",
+		"2006/01/02T15:04:05",
+		"2006/01/02 15:04",
+		"2006/01/02T15:04",
+		"2006/01/02",
 	}
 	for _, layout := range layouts {
 		var parsed time.Time
