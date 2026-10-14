@@ -74,6 +74,33 @@ func TestTaskRoutes(t *testing.T) {
 		t.Fatalf("task list = %#v, want one created task", tasks)
 	}
 
+	schedule := httptest.NewRecorder()
+	router.ServeHTTP(schedule, httptest.NewRequest(http.MethodPost, "/api/tasks/"+strconv.FormatInt(created.ID, 10)+"/schedule", nil))
+	if schedule.Code != http.StatusOK {
+		t.Fatalf("schedule task status = %d, body = %s", schedule.Code, schedule.Body.String())
+	}
+	var scheduled struct {
+		Scheduled bool `json:"scheduled"`
+	}
+	if err := json.Unmarshal(schedule.Body.Bytes(), &scheduled); err != nil {
+		t.Fatalf("decode scheduled task: %v", err)
+	}
+	if !scheduled.Scheduled {
+		t.Fatal("scheduled task = false, want true")
+	}
+
+	unschedule := httptest.NewRecorder()
+	router.ServeHTTP(unschedule, httptest.NewRequest(http.MethodDelete, "/api/tasks/"+strconv.FormatInt(created.ID, 10)+"/schedule", nil))
+	if unschedule.Code != http.StatusOK {
+		t.Fatalf("unschedule task status = %d, body = %s", unschedule.Code, unschedule.Body.String())
+	}
+	if err := json.Unmarshal(unschedule.Body.Bytes(), &scheduled); err != nil {
+		t.Fatalf("decode unscheduled task: %v", err)
+	}
+	if scheduled.Scheduled {
+		t.Fatal("unscheduled task = true, want false")
+	}
+
 	template := httptest.NewRecorder()
 	router.ServeHTTP(template, httptest.NewRequest(http.MethodGet, "/api/tasks/import/template", nil))
 	if template.Code != http.StatusOK {

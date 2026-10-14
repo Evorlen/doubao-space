@@ -25,7 +25,7 @@ func TestOpenAppliesMigrations(t *testing.T) {
 		t.Fatalf("app_name = %q, want %q", appName, "豆包空间")
 	}
 	var migrationCount int
-	if err := db.QueryRow(`SELECT COUNT(1) FROM schema_migrations WHERE version = 11`).Scan(&migrationCount); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(1) FROM schema_migrations WHERE version = 12`).Scan(&migrationCount); err != nil {
 		db.Close()
 		t.Fatalf("read schema migration: %v", err)
 	}

@@ -126,6 +126,57 @@ func TestCreateListAndCompleteTaskTree(t *testing.T) {
 	}
 }
 
+func TestScheduleTaskLifecycle(t *testing.T) {
+	service := newTestService(t)
+	ctx := context.Background()
+
+	task, err := service.Create(ctx, CreateInput{Title: "准备演讲", Priority: PriorityMedium})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if task.Scheduled {
+		t.Fatal("new task is scheduled, want false")
+	}
+
+	scheduled, err := service.Schedule(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("Schedule() error = %v", err)
+	}
+	if !scheduled.Scheduled {
+		t.Fatal("scheduled task = false, want true")
+	}
+
+	listed, err := service.List(ctx, ListOptions{})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(listed) != 1 || !listed[0].Scheduled {
+		t.Fatalf("listed scheduled task = %#v, want one scheduled task", listed)
+	}
+
+	unscheduled, err := service.Unschedule(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("Unschedule() error = %v", err)
+	}
+	if unscheduled.Scheduled {
+		t.Fatal("unscheduled task = true, want false")
+	}
+
+	if _, err := service.Schedule(ctx, task.ID); err != nil {
+		t.Fatalf("Schedule() before completion error = %v", err)
+	}
+	completed, err := service.Complete(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if !completed.Completed || completed.Scheduled {
+		t.Fatalf("completed task = %#v, want completed and unscheduled", completed)
+	}
+	if _, err := service.Schedule(ctx, task.ID); err == nil {
+		t.Fatal("Schedule(completed) error = nil, want conflict")
+	}
+}
+
 func TestDeadlineRulesAndMoveRules(t *testing.T) {
 	service := newTestService(t)
 	ctx := context.Background()

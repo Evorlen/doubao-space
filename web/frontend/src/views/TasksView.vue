@@ -20,6 +20,8 @@ import {
   getTags,
   getTasks,
   moveTask as moveTaskRequest,
+  scheduleTask as scheduleTaskRequest,
+  unscheduleTask as unscheduleTaskRequest,
 } from '../api'
 
 const router = useRouter()
@@ -315,6 +317,22 @@ async function completeTask(task) {
   }
 }
 
+async function toggleSchedule(task) {
+  if (!task || task.completed) return
+  try {
+    if (task.scheduled) {
+      await unscheduleTaskRequest(task.id)
+      ElMessage.success('任务已移出日程。')
+    } else {
+      await scheduleTaskRequest(task.id)
+      ElMessage.success('任务已提上日程。')
+    }
+    await loadTasks()
+  } catch (error) {
+    ElMessage.error(error.message)
+  }
+}
+
 async function handleCommand({ command, task }) {
   if (command === 'open') {
     openTask(task)
@@ -326,6 +344,10 @@ async function handleCommand({ command, task }) {
   }
   if (command === 'import-child') {
     openImportDialog(task)
+    return
+  }
+  if (command === 'toggle-schedule') {
+    await toggleSchedule(task)
     return
   }
   if (command === 'move') {

@@ -93,6 +93,14 @@ export function completeTask(id) {
   return request(`/api/tasks/${id}/complete`, { method: 'POST' })
 }
 
+export function scheduleTask(id) {
+  return request(`/api/tasks/${id}/schedule`, { method: 'POST' })
+}
+
+export function unscheduleTask(id) {
+  return request(`/api/tasks/${id}/schedule`, { method: 'DELETE' })
+}
+
 export function moveTask(id, parentId) {
   return request(`/api/tasks/${id}/move`, {
     method: 'POST',

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import {
   ArrowDown,
   ArrowRight,
+  Calendar,
   CircleCheck,
   Clock,
   MoreFilled,
@@ -109,6 +110,7 @@ function handleCommand(command) {
       <div class="task-row-content" @click="emit('open', task)">
         <div class="task-title-line">
           <span class="task-title">{{ task.title }}</span>
+          <span v-if="task.scheduled" class="task-scheduled-badge"><Calendar />已提上日程</span>
           <span v-for="tag in task.tags?.slice(0, 2)" :key="tag" class="task-tag">{{ tag }}</span>
           <span v-if="task.tags?.length > 2" class="task-tag task-tag-more">+{{ task.tags.length - 2 }}</span>
         </div>
@@ -138,6 +140,7 @@ function handleCommand(command) {
             <el-dropdown-item command="open">打开详情</el-dropdown-item>
             <el-dropdown-item command="add-child" :disabled="task.completed || task.depth >= 5">添加子任务</el-dropdown-item>
             <el-dropdown-item command="import-child" :disabled="task.completed || task.depth >= 5">导入子任务</el-dropdown-item>
+            <el-dropdown-item command="toggle-schedule" :disabled="task.completed">{{ task.scheduled ? '移出日程' : '提上日程' }}</el-dropdown-item>
             <el-dropdown-item command="move" :disabled="task.completed">移动任务</el-dropdown-item>
             <el-dropdown-item command="delete" divided>删除任务</el-dropdown-item>
           </el-dropdown-menu>
@@ -262,6 +265,24 @@ function handleCommand(command) {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-scheduled-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 3px;
+  padding: 3px 6px;
+  color: #7a5d1b;
+  font-size: 11px;
+  font-weight: 600;
+  background: #fff6dc;
+  border-radius: 5px;
+}
+
+.task-scheduled-badge svg {
+  width: 12px;
+  height: 12px;
 }
 
 .task-row.is-complete .task-title {

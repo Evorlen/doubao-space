@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -44,6 +44,8 @@ const albumStats = ref({ total: 0, photos: 0, videos: 0 })
 const memos = ref([])
 const entertainment = ref([])
 const completingKey = ref('')
+const dashboardNow = ref(Date.now())
+let dashboardClock = null
 
 const todayLabel = computed(() => new Intl.DateTimeFormat('zh-CN', {
   month: 'long',
@@ -55,6 +57,8 @@ const allTasks = computed(() => flattenTasks(tasks.value))
 const incompleteTasks = computed(() => allTasks.value.filter((task) => !task.completed))
 const todayTasks = computed(() => incompleteTasks.value.filter((task) => dateValueFromInput(task.due_at) === todayValue))
 const overdueTasks = computed(() => incompleteTasks.value.filter((task) => isTaskOverdue(task)))
+const scheduledTasks = computed(() => incompleteTasks.value.filter((task) => task.scheduled).sort(compareScheduledTasks))
+const scheduledOverdueCount = computed(() => scheduledTasks.value.filter((task) => isScheduledTaskOverdue(task)).length)
 const recipeFoods = computed(() => {
   const weekday = recipe.value.today || weekdayNumber(new Date())
   return (recipe.value.foods || []).filter((food) => (food.days || []).includes(weekday))
@@ -174,6 +178,51 @@ function isTaskOverdue(task) {
   return !task.completed && Boolean(dueDate) && dueDate < todayValue
 }
 
+function parseTaskDate(value) {
+  if (!value) return null
+  const normalized = typeof value === 'string' ? value.replace(' ', 'T') : value
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function isScheduledTaskOverdue(task) {
+  const dueDate = parseTaskDate(task.due_at)
+  return Boolean(dueDate) && dueDate.getTime() < dashboardNow.value
+}
+
+function compareScheduledTasks(left, right) {
+  const overdueDifference = Number(isScheduledTaskOverdue(left)) - Number(isScheduledTaskOverdue(right))
+  if (overdueDifference !== 0) return overdueDifference * -1
+
+  const leftDue = parseTaskDate(left.due_at)
+  const rightDue = parseTaskDate(right.due_at)
+  if (!leftDue && rightDue) return 1
+  if (leftDue && !rightDue) return -1
+  if (leftDue && rightDue && leftDue.getTime() !== rightDue.getTime()) return leftDue.getTime() - rightDue.getTime()
+  return Number(right.id) - Number(left.id)
+}
+
+function scheduledTaskStatusLabel(task) {
+  if (!task.due_at) return '无截止时间'
+  return isScheduledTaskOverdue(task) ? '已逾期' : '未逾期'
+}
+
+function scheduledTaskStatusClass(task) {
+  if (!task.due_at) return 'is-neutral'
+  return isScheduledTaskOverdue(task) ? 'is-overdue' : 'is-upcoming'
+}
+
+function formatScheduledTaskDue(value) {
+  const date = parseTaskDate(value)
+  if (!date) return '无截止时间'
+  return `截止 ${new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)}`
+}
+
 function createOverdueTaskEvent(task) {
   return {
     id: `task:${task.id}`,
@@ -269,6 +318,10 @@ function formatDateTime(value) {
 
 function errorMessage(error) {
   return error?.message || '读取失败'
+}
+
+function openTask(task) {
+  router.push({ name: 'task-detail', params: { id: task.id } })
 }
 
 async function refreshDashboard() {
@@ -369,6 +422,30 @@ function openEvent(event) {
   }
 }
 
+async function completeScheduledTask(task) {
+  if (!task || completingKey.value) return
+  try {
+    await ElMessageBox.confirm('完成后将不能恢复或修改这个任务，确认继续吗？', '标记为已完成', {
+      type: 'info',
+      confirmButtonText: '确认完成',
+      cancelButtonText: '再想想',
+    })
+  } catch {
+    return
+  }
+
+  completingKey.value = `scheduled-task:${task.id}`
+  try {
+    await completeTask(task.id)
+    await refreshDashboard()
+    ElMessage.success(`“${task.title}”已完成。`)
+  } catch (error) {
+    ElMessage.error(errorMessage(error))
+  } finally {
+    completingKey.value = ''
+  }
+}
+
 async function completeEvent(event) {
   if (!event.can_complete || completingKey.value) return
   if (event.source === 'task') {
@@ -399,6 +476,13 @@ async function completeEvent(event) {
 
 onMounted(() => {
   refreshDashboard()
+  dashboardClock = window.setInterval(() => {
+    dashboardNow.value = Date.now()
+  }, 60 * 1000)
+})
+
+onUnmounted(() => {
+  if (dashboardClock) window.clearInterval(dashboardClock)
 })
 </script>
 
@@ -437,6 +521,61 @@ onMounted(() => {
           <div class="stat-note">{{ stat.note }}</div>
         </div>
       </article>
+    </section>
+
+    <section class="surface-card dashboard-panel scheduled-task-panel">
+      <div class="card-heading">
+        <div>
+          <p class="scheduled-task-overline">FOCUS TASKS</p>
+          <h2>已提上日程</h2>
+          <p>需要持续关注的任务会置顶显示，完成后自动移出这里。</p>
+        </div>
+        <div class="scheduled-task-heading-side">
+          <span class="scheduled-task-count">{{ scheduledTasks.length }} 项<template v-if="scheduledOverdueCount"> · {{ scheduledOverdueCount }} 项已逾期</template></span>
+          <RouterLink to="/dashboard/tasks" class="muted-link">管理任务 <ArrowRight /></RouterLink>
+        </div>
+      </div>
+
+      <div v-if="dashboardLoading" class="dashboard-loading">正在读取已提上日程的任务……</div>
+      <div v-else-if="scheduledTasks.length" class="scheduled-task-list">
+        <article
+          v-for="task in scheduledTasks"
+          :key="task.id"
+          class="scheduled-task-item"
+          :class="{ 'is-overdue': isScheduledTaskOverdue(task) }"
+        >
+          <span class="scheduled-task-icon"><Calendar /></span>
+          <button type="button" class="scheduled-task-main" @click="openTask(task)">
+            <span class="scheduled-task-title-line">
+              <strong>{{ task.title }}</strong>
+              <span class="scheduled-task-status" :class="scheduledTaskStatusClass(task)">{{ scheduledTaskStatusLabel(task) }}</span>
+            </span>
+            <span class="scheduled-task-meta">
+              <span><Calendar />{{ formatScheduledTaskDue(task.due_at) }}</span>
+              <span>{{ priorityLabel(task.effective_priority || task.priority) }}</span>
+            </span>
+          </button>
+          <div class="scheduled-task-actions">
+            <el-button text size="small" @click="openTask(task)">查看任务</el-button>
+            <el-button
+              type="primary"
+              size="small"
+              :loading="completingKey === `scheduled-task:${task.id}`"
+              @click="completeScheduledTask(task)"
+            >
+              <Check class="button-icon" />完成
+            </el-button>
+          </div>
+        </article>
+      </div>
+      <div v-else class="scheduled-task-empty">
+        <div class="scheduled-task-empty-icon"><Calendar /></div>
+        <div>
+          <strong>还没有提上日程的任务</strong>
+          <p>在任务列表的更多操作中，把需要持续关注的任务提上日程。</p>
+        </div>
+        <RouterLink to="/dashboard/tasks" class="dashboard-inline-link">去任务列表 <ArrowRight /></RouterLink>
+      </div>
     </section>
 
     <section class="dashboard-main-grid">
@@ -781,6 +920,194 @@ onMounted(() => {
 .dashboard-panel {
   min-width: 0;
   padding: 24px;
+}
+
+.scheduled-task-panel {
+  margin-bottom: 18px;
+}
+
+.scheduled-task-overline {
+  color: var(--ds-color-primary) !important;
+  font-size: 10px !important;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.scheduled-task-heading-side {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 16px;
+}
+
+.scheduled-task-count {
+  color: var(--ds-color-text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.scheduled-task-list {
+  margin-top: 18px;
+}
+
+.scheduled-task-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 0;
+  border-top: 1px solid #eff1f6;
+}
+
+.scheduled-task-item:first-child {
+  border-top: 0;
+}
+
+.scheduled-task-icon,
+.scheduled-task-empty-icon {
+  display: grid;
+  place-items: center;
+  color: #ae7d2e;
+  background: #fff7e6;
+  border-radius: 10px;
+}
+
+.scheduled-task-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.scheduled-task-icon svg,
+.scheduled-task-empty-icon svg {
+  width: 17px;
+}
+
+.scheduled-task-item.is-overdue .scheduled-task-icon {
+  color: var(--ds-color-danger);
+  background: #fff0f0;
+}
+
+.scheduled-task-main {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+}
+
+.scheduled-task-title-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.scheduled-task-title-line strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-color-text-primary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduled-task-status {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.scheduled-task-status.is-overdue {
+  color: var(--ds-color-danger);
+}
+
+.scheduled-task-status.is-upcoming {
+  color: var(--ds-color-success);
+}
+
+.scheduled-task-status.is-neutral {
+  color: var(--ds-color-text-tertiary);
+}
+
+.scheduled-task-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 5px;
+  color: var(--ds-color-text-tertiary);
+  font-size: 11px;
+}
+
+.scheduled-task-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.scheduled-task-meta svg {
+  width: 13px;
+}
+
+.scheduled-task-item.is-overdue .scheduled-task-meta span:first-child {
+  color: var(--ds-color-danger);
+}
+
+.scheduled-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.scheduled-task-actions .el-button {
+  min-height: 26px;
+  padding: 3px 7px;
+  font-size: 11px;
+}
+
+.scheduled-task-actions .button-icon {
+  width: 13px;
+  height: 13px;
+  margin-right: 4px;
+}
+
+.scheduled-task-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px;
+  color: var(--ds-color-text-tertiary);
+  background: var(--ds-color-surface-muted);
+  border-radius: 11px;
+}
+
+.scheduled-task-empty-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+}
+
+.scheduled-task-empty strong,
+.scheduled-task-empty p {
+  display: block;
+}
+
+.scheduled-task-empty strong {
+  color: var(--ds-color-text-primary);
+  font-size: 12px;
+}
+
+.scheduled-task-empty p {
+  margin: 3px 0 0;
+  font-size: 11px;
+}
+
+.scheduled-task-empty .dashboard-inline-link {
+  margin: 0 0 0 auto;
+  white-space: nowrap;
 }
 
 .today-panel,
@@ -1371,6 +1698,31 @@ onMounted(() => {
 
   .dashboard-panel {
     padding: 18px;
+  }
+
+  .scheduled-task-heading-side {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .scheduled-task-item {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .scheduled-task-actions {
+    grid-column: 2;
+    justify-content: flex-end;
+  }
+
+  .scheduled-task-empty {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .scheduled-task-empty .dashboard-inline-link {
+    width: 100%;
+    margin-left: 46px;
   }
 
   .dashboard-event {

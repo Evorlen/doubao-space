@@ -28,6 +28,8 @@ func (h *Handler) Register(router *gin.RouterGroup) {
 	router.GET("/tasks/:id", h.get)
 	router.PUT("/tasks/:id", h.update)
 	router.POST("/tasks/:id/complete", h.complete)
+	router.POST("/tasks/:id/schedule", h.schedule)
+	router.DELETE("/tasks/:id/schedule", h.unschedule)
 	router.POST("/tasks/:id/move", h.move)
 	router.POST("/tasks/:id/attachments", h.addAttachment)
 	router.GET("/tasks/:id/attachments/:attachmentId", h.downloadAttachment)
@@ -156,6 +158,32 @@ func (h *Handler) complete(c *gin.Context) {
 		return
 	}
 	task, err := h.service.Complete(c.Request.Context(), id)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, task)
+}
+
+func (h *Handler) schedule(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	task, err := h.service.Schedule(c.Request.Context(), id)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, task)
+}
+
+func (h *Handler) unschedule(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	task, err := h.service.Unschedule(c.Request.Context(), id)
 	if err != nil {
 		writeError(c, err)
 		return

@@ -106,6 +106,7 @@ type Task struct {
 	DueAt             *time.Time   `json:"due_at"`
 	Priority          string       `json:"priority"`
 	EffectivePriority string       `json:"effective_priority"`
+	Scheduled         bool         `json:"scheduled"`
 	Completed         bool         `json:"completed"`
 	CreatedAt         string       `json:"created_at"`
 	UpdatedAt         string       `json:"updated_at"`
@@ -329,8 +330,44 @@ func (s *Service) Complete(ctx context.Context, id int64) (*Task, error) {
 		}
 		return nil, &ConflictError{Message: fmt.Sprintf("请先完成以下任务：%s。", strings.Join(pending, "、"))}
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE tasks SET completed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, id); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE tasks SET completed = 1, scheduled = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, id); err != nil {
 		return nil, fmt.Errorf("complete task: %w", err)
+	}
+	return s.Get(ctx, id)
+}
+
+// Schedule marks an incomplete task for the dashboard's scheduled area.
+func (s *Service) Schedule(ctx context.Context, id int64) (*Task, error) {
+	task, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if task.Completed {
+		return nil, &ConflictError{Message: "已完成任务不可提上日程。"}
+	}
+	if task.Scheduled {
+		return task, nil
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE tasks SET scheduled = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, id); err != nil {
+		return nil, fmt.Errorf("schedule task: %w", err)
+	}
+	return s.Get(ctx, id)
+}
+
+// Unschedule removes an incomplete task from the dashboard's scheduled area.
+func (s *Service) Unschedule(ctx context.Context, id int64) (*Task, error) {
+	task, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if task.Completed {
+		return nil, &ConflictError{Message: "已完成任务不可移出日程。"}
+	}
+	if !task.Scheduled {
+		return task, nil
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE tasks SET scheduled = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, id); err != nil {
+		return nil, fmt.Errorf("unschedule task: %w", err)
 	}
 	return s.Get(ctx, id)
 }
@@ -619,7 +656,7 @@ func (s *Service) CreateTag(ctx context.Context, name string) (Tag, error) {
 
 func (s *Service) loadForest(ctx context.Context) ([]*Task, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, parent_id, title, description, due_at, priority, completed, created_at, updated_at, import_key
+		SELECT id, parent_id, title, description, due_at, priority, scheduled, completed, created_at, updated_at, import_key
 		FROM tasks
 		ORDER BY created_at ASC, id ASC
 	`)
@@ -753,9 +790,9 @@ func scanTask(row scanner) (*Task, error) {
 		task                                   Task
 		parentID                               sql.NullInt64
 		dueAt, createdAt, updatedAt, importKey sql.NullString
-		completed                              int
+		scheduled, completed                   int
 	)
-	if err := row.Scan(&task.ID, &parentID, &task.Title, &task.Description, &dueAt, &task.Priority, &completed, &createdAt, &updatedAt, &importKey); err != nil {
+	if err := row.Scan(&task.ID, &parentID, &task.Title, &task.Description, &dueAt, &task.Priority, &scheduled, &completed, &createdAt, &updatedAt, &importKey); err != nil {
 		return nil, fmt.Errorf("scan task: %w", err)
 	}
 	if parentID.Valid {
@@ -770,6 +807,7 @@ func scanTask(row scanner) (*Task, error) {
 		task.DueAt = &value
 	}
 	task.Completed = completed != 0
+	task.Scheduled = scheduled != 0
 	task.CreatedAt = createdAt.String
 	task.UpdatedAt = updatedAt.String
 	if importKey.Valid {

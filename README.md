@@ -54,6 +54,7 @@ make dev-frontend
 - `POST /api/tasks/:id/import`：将预览通过的 Excel 行批量创建为当前任务的子任务
 - `GET/PUT/DELETE /api/tasks/:id`：查看、编辑和永久删除任务子树
 - `POST /api/tasks/:id/complete`：完成任务
+- `POST/DELETE /api/tasks/:id/schedule`：提上日程或移出日程
 - `POST /api/tasks/:id/move`：移动任务并重新校验层级和期限规则
 - `POST/GET/DELETE /api/tasks/:id/attachments`：上传、下载和删除本地附件（单个文件最大 25 MB）
 - `GET/POST /api/tags`：读取和创建标签

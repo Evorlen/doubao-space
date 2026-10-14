@@ -20,6 +20,8 @@ import {
   deleteAttachment as deleteAttachmentRequest,
   deleteTask as deleteTaskRequest,
   getTask,
+  scheduleTask as scheduleTaskRequest,
+  unscheduleTask as unscheduleTaskRequest,
   uploadAttachment as uploadAttachmentRequest,
   updateTask as updateTaskRequest,
 } from '../api'
@@ -31,6 +33,7 @@ const task = ref(null)
 const loading = ref(true)
 const errorMessage = ref('')
 const saving = ref(false)
+const scheduleSaving = ref(false)
 const deleting = ref(false)
 const childDialogVisible = ref(false)
 const childTitle = ref('')
@@ -252,6 +255,21 @@ async function completeTask() {
   }
 }
 
+async function toggleSchedule() {
+  if (!task.value || isReadOnly.value || scheduleSaving.value) return
+  scheduleSaving.value = true
+  try {
+    task.value = task.value.scheduled
+      ? await unscheduleTaskRequest(task.value.id)
+      : await scheduleTaskRequest(task.value.id)
+    ElMessage.success(task.value.scheduled ? '任务已提上日程。' : '任务已移出日程。')
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    scheduleSaving.value = false
+  }
+}
+
 async function deleteTask() {
   if (!task.value) return
   try {
@@ -342,6 +360,7 @@ onMounted(loadTask)
           <el-button v-if="!isReadOnly" type="primary" :loading="saving" @click="saveTask"><Edit class="button-icon" />保存修改</el-button>
           <el-button v-if="!isReadOnly && isDirty" class="soft-button" @click="cancelChanges">取消修改</el-button>
           <el-button v-if="!isReadOnly" class="soft-button" @click="completeTask"><CircleCheck class="button-icon" />标记完成</el-button>
+          <el-button v-if="!isReadOnly" class="soft-button" :loading="scheduleSaving" @click="toggleSchedule"><Calendar class="button-icon" />{{ task.scheduled ? '移出日程' : '提上日程' }}</el-button>
           <el-button circle :loading="deleting" aria-label="删除任务" @click="deleteTask"><Delete /></el-button>
         </div>
       </section>
@@ -476,6 +495,10 @@ onMounted(loadTask)
           <div class="surface-card detail-property-card">
             <div class="detail-section-heading"><h2>任务属性</h2></div>
             <div class="property-list">
+              <div class="property-row">
+                <span class="property-label"><Calendar />日程状态</span>
+                <strong class="property-value" :class="{ 'is-scheduled': task.scheduled }">{{ task.scheduled ? '已提上日程' : '未提上日程' }}</strong>
+              </div>
               <div class="property-row">
                 <span class="property-label"><Calendar />截止时间</span>
                 <strong class="property-value" :class="dueTone">{{ dueLabel }}</strong>
