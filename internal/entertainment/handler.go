@@ -3,6 +3,8 @@ package entertainment
 import (
 	"errors"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -20,9 +22,55 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) Register(router *gin.RouterGroup) {
 	router.GET("/entertainment", h.list)
 	router.POST("/entertainment", h.create)
+	router.GET("/entertainment/import/template", h.downloadImportTemplate)
+	router.POST("/entertainment/import/preview", h.previewImport)
+	router.POST("/entertainment/import", h.importItems)
 	router.GET("/entertainment/:id", h.get)
 	router.PUT("/entertainment/:id", h.update)
 	router.DELETE("/entertainment/:id", h.delete)
+}
+
+func (h *Handler) downloadImportTemplate(c *gin.Context) {
+	content, err := entertainmentImportTemplateXLSX()
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.Header("Content-Disposition", `attachment; filename="entertainment-import-template.xlsx"; filename*=UTF-8''`+url.PathEscape("娱乐导入模板.xlsx"))
+	c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content)
+}
+
+func (h *Handler) previewImport(c *gin.Context) {
+	h.processImport(c, false)
+}
+
+func (h *Handler) importItems(c *gin.Context) {
+	h.processImport(c, true)
+}
+
+func (h *Handler) processImport(c *gin.Context, commit bool) {
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		writeError(c, &ValidationError{Message: "请选择要导入的 .xlsx 文件。"})
+		return
+	}
+	defer file.Close()
+	if !strings.EqualFold(filepath.Ext(header.Filename), ".xlsx") {
+		writeError(c, &ValidationError{Message: "目前只支持 .xlsx 格式的 Excel 文件。"})
+		return
+	}
+
+	var report EntertainmentImportReport
+	if commit {
+		report, err = h.service.Import(c.Request.Context(), file)
+	} else {
+		report, err = h.service.PreviewImport(c.Request.Context(), file)
+	}
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, report)
 }
 
 func (h *Handler) list(c *gin.Context) {

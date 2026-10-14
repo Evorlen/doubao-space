@@ -296,6 +296,24 @@ export function deleteEntertainmentItem(id) {
   return request(`/api/entertainment/${id}`, { method: 'DELETE' })
 }
 
+export function previewEntertainmentImport(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request('/api/entertainment/import/preview', {
+    method: 'POST',
+    body,
+  })
+}
+
+export function importEntertainmentItems(file) {
+  const body = new FormData()
+  body.append('file', file)
+  return request('/api/entertainment/import', {
+    method: 'POST',
+    body,
+  })
+}
+
 export function getMemos(options = {}) {
   const params = new URLSearchParams()
   if (typeof options.archived === 'boolean') params.set('archived', options.archived ? 'true' : 'false')

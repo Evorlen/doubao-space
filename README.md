@@ -95,7 +95,12 @@ make dev-frontend
 
 - `GET /api/entertainment`：读取作品列表和汇总统计，支持 `type`、`status`、`search`、`rating`、`favorite` 和 `sort` 筛选
 - `POST /api/entertainment`：新增作品，并记录类型、状态、进度、评分、标签和个人评价
+- `GET /api/entertainment/import/template`：下载娱乐作品 Excel 空白模板
+- `POST /api/entertainment/import/preview`：上传 `.xlsx` 娱乐作品表并预览逐行校验与查重结果
+- `POST /api/entertainment/import`：将预览通过的 Excel 行批量创建为作品
 - `GET/PUT/DELETE /api/entertainment/:id`：查看、编辑或删除作品
+
+娱乐作品导入模板支持作品类型、作品名称、作者或导演、年份、来源、状态、当前进度、总进度、评分、个人评价、备注、收藏、标签、开始日期和完成日期；导入采用“预览—确认”流程，错误行会阻止整个批次写入，重复作品按类型、名称和作者/导演跳过。
 
 备忘录模块用于记录可长期整理的想法，支持富文本、归档和恢复，主要接口包括：
 

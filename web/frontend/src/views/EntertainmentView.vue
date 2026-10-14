@@ -11,9 +11,11 @@ import {
   Search,
   Star,
   StarFilled,
+  Upload,
   VideoCamera,
   WarningFilled,
 } from '@element-plus/icons-vue'
+import EntertainmentImportDialog from '../components/entertainment/EntertainmentImportDialog.vue'
 import {
   createEntertainmentItem,
   deleteEntertainmentItem,
@@ -71,6 +73,7 @@ const statusFilter = ref('')
 const ratingFilter = ref('')
 const favoriteOnly = ref(false)
 const sortKey = ref('updated')
+const importDialogVisible = ref(false)
 const drawerVisible = ref(false)
 const editingId = ref(null)
 const saving = ref(false)
@@ -303,6 +306,9 @@ onMounted(loadItems)
       <div class="page-heading-actions">
         <el-button class="soft-button" :loading="loading" @click="loadItems">
           <Refresh class="button-icon" />刷新
+        </el-button>
+        <el-button class="soft-button" @click="importDialogVisible = true">
+          <Upload class="button-icon" />导入 Excel
         </el-button>
         <el-button type="primary" @click="openCreate">
           <Plus class="button-icon" />添加作品
@@ -573,6 +579,8 @@ onMounted(loadItems)
         </div>
       </template>
     </el-drawer>
+
+    <EntertainmentImportDialog v-model="importDialogVisible" @imported="loadItems" />
   </div>
 </template>
 

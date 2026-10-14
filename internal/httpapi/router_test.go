@@ -401,6 +401,18 @@ func TestEntertainmentRoutes(t *testing.T) {
 		t.Fatalf("entertainment response = %#v", response)
 	}
 
+	template := httptest.NewRecorder()
+	router.ServeHTTP(template, httptest.NewRequest(http.MethodGet, "/api/entertainment/import/template", nil))
+	if template.Code != http.StatusOK {
+		t.Fatalf("entertainment import template status = %d, body = %s", template.Code, template.Body.String())
+	}
+	if got := template.Header().Get("Content-Type"); got != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+		t.Fatalf("entertainment import template content type = %q", got)
+	}
+	if body := template.Body.Bytes(); len(body) < 2 || body[0] != 'P' || body[1] != 'K' {
+		t.Fatalf("entertainment import template is not an xlsx archive")
+	}
+
 	update := httptest.NewRecorder()
 	updateRequest := httptest.NewRequest(http.MethodPut, "/api/entertainment/"+strconv.FormatInt(created.ID, 10), bytes.NewBufferString(`{"media_type":"movie","title":"海街日记","creator":"是枝裕和","status":"completed","rating":5,"favorite":true,"review":"很温柔。"}`))
 	updateRequest.Header.Set("Content-Type", "application/json")
