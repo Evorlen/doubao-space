@@ -868,9 +868,6 @@ func validateForest(roots []*Task) error {
 			return &InputError{Message: "任务优先级不合法。"}
 		}
 		if parent != nil {
-			if parent.DueAt == nil && task.DueAt != nil {
-				return &ConflictError{Message: fmt.Sprintf("无法设置截止时间：父任务“%s”没有截止时间。", parent.Title)}
-			}
 			if parent.DueAt != nil && task.DueAt == nil {
 				return &ConflictError{Message: fmt.Sprintf("无法清除截止时间：父任务“%s”有截止时间。", parent.Title)}
 			}

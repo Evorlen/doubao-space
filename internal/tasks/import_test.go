@@ -94,6 +94,44 @@ func TestTaskImportPreviewAndCommit(t *testing.T) {
 	}
 }
 
+func TestTaskImportAllowsDeadlineUnderNoDeadlineParent(t *testing.T) {
+	service := newTestService(t)
+	ctx := context.Background()
+
+	parent, err := service.Create(ctx, CreateInput{Title: "长期规划", Priority: PriorityMedium})
+	if err != nil {
+		t.Fatalf("Create(parent) error = %v", err)
+	}
+
+	workbook := testTaskWorkbook(t, [][]string{
+		{"任务标题", "截止时间", "优先级"},
+		{"本周完成事项", "2026-10-20 18:00", "中"},
+	})
+	preview, err := service.PreviewImport(ctx, parent.ID, bytes.NewReader(workbook))
+	if err != nil {
+		t.Fatalf("PreviewImport() error = %v", err)
+	}
+	if preview.NewCount != 1 || preview.ErrorCount != 0 || !preview.CanImport {
+		t.Fatalf("preview = %#v, want one importable deadline child", preview)
+	}
+
+	result, err := service.Import(ctx, parent.ID, bytes.NewReader(workbook))
+	if err != nil {
+		t.Fatalf("Import() error = %v", err)
+	}
+	if result.CreatedCount != 1 || result.ErrorCount != 0 {
+		t.Fatalf("import result = %#v, want one created task", result)
+	}
+
+	got, err := service.Get(ctx, parent.ID)
+	if err != nil {
+		t.Fatalf("Get(parent) error = %v", err)
+	}
+	if len(got.Children) != 1 || got.Children[0].DueAt == nil {
+		t.Fatalf("imported children = %#v, want one child with deadline", got.Children)
+	}
+}
+
 func TestTaskImportTemplate(t *testing.T) {
 	content, err := taskImportTemplateXLSX()
 	if err != nil {

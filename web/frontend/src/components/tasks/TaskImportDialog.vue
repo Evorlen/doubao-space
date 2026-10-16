@@ -27,7 +27,7 @@ const canImport = computed(() => Boolean(props.task && !props.task.completed && 
 const canConfirm = computed(() => Boolean(preview.value && preview.value.error_count === 0 && preview.value.new_count > 0 && !importing.value))
 const dueHint = computed(() => props.task?.due_at
   ? '当前父任务有截止时间，表格中的每一行都必须填写不晚于父任务的截止时间。'
-  : '当前父任务没有截止时间，表格中的截止时间必须留空。')
+  : '当前父任务没有截止时间，表格中的截止时间可以按子任务需要填写，也可以留空。')
 
 watch(() => props.modelValue, (visible) => {
   if (visible) reset()
@@ -154,7 +154,7 @@ function statusLabel(status) {
           <span>任务标题</span><span>必填，每行一个任务。</span>
           <span>导入编号</span><span>可选；同一父任务下应保持唯一，便于重复导入时查重。</span>
           <span>任务描述</span><span>可选，填写普通文本。</span>
-          <span>截止时间</span><span>填写 <code>2026-10-31 00:00</code>；也支持 Excel 日期单元格。父任务无期限时留空。</span>
+          <span>截止时间</span><span>填写 <code>2026-10-31 00:00</code>；也支持 Excel 日期单元格。父任务无期限时可按子任务需要填写。</span>
           <span>优先级</span><span>填写“紧急 / 高 / 中 / 低”，留空默认为“中”。</span>
           <span>标签</span><span>多个标签用“；”或英文逗号分隔。</span>
           <span>外部链接</span><span>格式为 <code>名称|https://example.com</code>，多个链接用“；”或换行分隔。</span>

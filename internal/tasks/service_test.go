@@ -185,13 +185,17 @@ func TestDeadlineRulesAndMoveRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create(no deadline) error = %v", err)
 	}
-	if _, err := service.Create(ctx, CreateInput{
+	shortTermChild, err := service.Create(ctx, CreateInput{
 		ParentID: &noDeadline.ID,
-		Title:    "错误的有期限子任务",
+		Title:    "短期子任务",
 		DueAt:    "2026-10-20T18:00:00Z",
 		Priority: PriorityMedium,
-	}); err == nil {
-		t.Fatal("Create(deadline child) error = nil, want deadline-mode conflict")
+	})
+	if err != nil {
+		t.Fatalf("Create(deadline child under no-deadline parent) error = %v", err)
+	}
+	if shortTermChild.DueAt == nil {
+		t.Fatal("deadline child has nil DueAt, want deadline")
 	}
 
 	root, err := service.Create(ctx, CreateInput{

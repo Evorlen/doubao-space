@@ -528,7 +528,9 @@ onMounted(loadTask)
       </section>
 
       <el-dialog v-model="childDialogVisible" title="添加子任务" width="560px" destroy-on-close>
-        <div class="dialog-lead">子任务会继承当前任务树的期限规则。</div>
+        <div class="dialog-lead">
+          {{ task.due_at ? '当前父任务有截止时间，子任务默认继承该时间，也可以设置得更早。' : '当前父任务没有截止时间，子任务仍可以单独设置截止时间，也可以留空。' }}
+        </div>
         <el-form label-position="top">
           <el-form-item label="任务标题" required>
             <el-input v-model="childTitle" autofocus placeholder="例如：整理参考资料" />
